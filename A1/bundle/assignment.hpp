@@ -8,6 +8,7 @@
 
 #include <atlas/math/Math.hpp>
 #include <atlas/math/Ray.hpp>
+#include <atlas/math/Solvers.hpp>
 
 #include <fmt/printf.h>
 #include <stb_image.h>
@@ -28,6 +29,36 @@ void saveToBMP(std::string const& filename,
 struct ShadeRec {
     Colour colour;
     float t;
+};
+
+class Plane {
+public:
+    constexpr Plane(atlas::math::Point p, atlas::math::Normal normal, Colour colour):
+        p_{p},
+        normal_{normal},
+        colour_{colour}
+    {}
+
+    bool hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& trace_data)const {
+        auto o_c{ p_ - ray.o };
+        auto a{ glm::dot(o_c, normal_) };
+        float b = 1;
+        b = glm::dot(ray.d, normal_);
+        auto c{ a / b };
+
+        if (c > 0.0001f) {
+            trace_data.colour = colour_;
+            trace_data.t = c;
+            return true;
+        }
+        
+        return false;
+    }
+
+private:
+    atlas::math::Point p_;
+    atlas::math::Vector normal_;
+    Colour colour_;
 };
 
 class Sphere {
