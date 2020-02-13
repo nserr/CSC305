@@ -33,17 +33,17 @@ struct ShadeRec {
 
 class Plane {
 public:
-    constexpr Plane(atlas::math::Point p, atlas::math::Normal normal, Colour colour):
+    constexpr Plane(atlas::math::Point p, atlas::math::Normal norm, Colour colour):
         p_{p},
-        normal_{normal},
+        norm_{norm},
         colour_{colour}
     {}
 
-    bool hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& trace_data)const {
+    bool hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& trace_data) const {
         auto o_c{ p_ - ray.o };
-        auto a{ glm::dot(o_c, normal_) };
+        auto a{ glm::dot(o_c, norm_) };
         float b = 1;
-        b = glm::dot(ray.d, normal_);
+        b = glm::dot(ray.d, norm_);
         auto c{ a / b };
 
         if (c > 0.0001f) {
@@ -57,7 +57,7 @@ public:
 
 private:
     atlas::math::Point p_;
-    atlas::math::Vector normal_;
+    atlas::math::Vector norm_;
     Colour colour_;
 };
 

@@ -8,7 +8,7 @@
 #include <random>
 
  /**
-  * Multisample antialiasing using Random Sampling.
+  * Multisample antialiasing using Regular Sampling.
   *
   * @param x The x value of the pixel
   * @param y The y value of the pixel
