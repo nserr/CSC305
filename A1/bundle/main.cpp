@@ -12,13 +12,15 @@
   *
   * @param x The x value of the pixel
   * @param y The y value of the pixel
-  * @param spheres The array of spheres
-  * @param num_spheres The number of spheres in the array
   * @param planes The array of planes
   * @param num_planes The number of planes in the array
+  * @param spheres The array of spheres
+  * @param num_spheres The number of spheres in the array
+  * @param triangles The array of triangles
+  * @param num_triangles The number of triangles in the array
   * return the average of all sample colours
   */
-Colour regularSample(std::size_t x, std::size_t y, Sphere spheres[], int num_spheres, Plane planes[], int num_planes) {
+Colour regularSample(std::size_t x, std::size_t y, Plane planes[], int num_planes, Sphere spheres[], int num_spheres, Triangle triangles[], int num_triangles) {
     atlas::math::Ray<atlas::math::Vector> ray{ {0,0,0}, {0,0,-1} };
     Colour colour_sum_reg{ 0,0,0 };
     ShadeRec trace_data{};
@@ -29,7 +31,7 @@ Colour regularSample(std::size_t x, std::size_t y, Sphere spheres[], int num_sph
         for (float sample_y{ 0.125 }; sample_y < 1.0f; sample_y += 0.25f) {
             ray.o = { x + sample_x, y + sample_y, 0 };
 
-            // Check each object
+            // Check each sphere
             for (int i{ 0 }; i < num_spheres; i++) {
                 // If ray hits, track colour of pixel sample
                 if (spheres[i].hit(ray, trace_data)) {
@@ -38,11 +40,20 @@ Colour regularSample(std::size_t x, std::size_t y, Sphere spheres[], int num_sph
                 }      
             }
 
-            // If no spheres intersect, check planes
+            // Check each triangle
+            for (int i{ 0 }; i < num_triangles; i++) {
+                // If ray hits, track colour of pixel sample
+                if (triangles[i].hit(ray, trace_data)) {
+                    colour_sum_reg += trace_data.colour;
+                    one_hit = true;
+                }
+            }
+
+            // If no other objects intersect, check planes
             if (one_hit == false) {
-                for (int j{ 0 }; j < num_planes; j++) {
+                for (int i{ 0 }; i < num_planes; i++) {
                     // If ray hits, track colour of pixel sample
-                    if (planes[j].hit(ray, trace_data)) {
+                    if (planes[i].hit(ray, trace_data)) {
                         colour_sum_reg += trace_data.colour;
                     }
                 }
@@ -61,14 +72,16 @@ Colour regularSample(std::size_t x, std::size_t y, Sphere spheres[], int num_sph
  *
  * @param x The x value of the pixel
  * @param y The y value of the pixel
- * @param spheres The array of spheres
- * @param num_spheres The number of spheres in the array
  * @param planes The array of planes
  * @param num_planes The number of planes in the array
- * @param num_points The number of random points to use
+ * @param spheres The array of spheres
+ * @param num_spheres The number of spheres in the array
+ * @param triangles The array of triangles
+ * @param num_triangles The number of triangles in the array
+ * @param num_points The number of points to sample
  * return the average of all sample colours
  */
-Colour randomSample(std::size_t x, std::size_t y, Sphere spheres[], int num_spheres, Plane planes[], int num_planes, int num_points) {
+Colour randomSample(std::size_t x, std::size_t y, Plane planes[], int num_planes, Sphere spheres[], int num_spheres, Triangle triangles[], int num_triangles, int num_points) {
     atlas::math::Ray<atlas::math::Vector> ray{ {0,0,0}, {0,0,-1} };
     Colour colour_sum_ran{ 0,0,0 };
     ShadeRec trace_data{};
@@ -90,11 +103,20 @@ Colour randomSample(std::size_t x, std::size_t y, Sphere spheres[], int num_sphe
             }
         }
 
-        // If no spheres intersect, check planes
+        // Check each triangle
+        for (int k{ 0 }; k < num_triangles; k++) {
+            // If ray hits, track colour of pixel sample
+            if (triangles[k].hit(ray, trace_data)) {
+                colour_sum_ran += trace_data.colour;
+                one_hit = true;
+            }
+        }
+
+        // If no other objects intersect, check planes
         if (one_hit == false) {
-            for (int k{ 0 }; k < num_planes; k++) {
+            for (int l{ 0 }; l < num_planes; l++) {
                 // If ray hits, track colour of pixel sample
-                if (planes[k].hit(ray, trace_data)) {
+                if (planes[l].hit(ray, trace_data)) {
                     colour_sum_ran += trace_data.colour;
                 }
             }
@@ -117,16 +139,18 @@ int main()
     constexpr Plane p2{ {200,0,100}, {1,0,0}, {1,0,1} };
     constexpr Sphere s1{ {100,75,0}, 50, {1,0,0} };
     constexpr Sphere s2{ {280,150,0}, 75, {0,1,0} };
-    constexpr Sphere s3{ {480,225,0}, 100, {0,0,1} };
-    constexpr Sphere s4{ {120,375,0}, 100, {0.5,0,1} };
-    constexpr Sphere s5{ {320,450,0}, 75, {0,1,1} };
-    constexpr Sphere s6{ {500,525,0}, 50, {1,0,0.5} };
+    constexpr Sphere s3{ {320,450,0}, 75, {1,0.5,0} };
+    constexpr Sphere s4{ {500,525,0}, 50, {1,0,0.5} };
+    constexpr Triangle t1{ {475, 175, 0}, {400, 325, 0}, {550, 325, 0}, {0,0,1} };
+    constexpr Triangle t2{ {100, 300, 0}, {50, 450, 0}, {150, 450, 0}, {0,1,1} };
     
-    constexpr int num_spheres = 6;
     constexpr int num_planes = 2;
+    constexpr int num_spheres = 4;
+    constexpr int num_triangles = 2;
 
-    Sphere spheres[num_spheres] = { s1, s2, s3, s4, s5, s6 };
     Plane planes[num_planes] = { p1, p2 };
+    Sphere spheres[num_spheres] = { s1, s2, s3, s4 };
+    Triangle triangles[num_triangles] = { t1, t2 };
    
     std::vector<Colour> image{ image_width * image_height };
 
@@ -134,8 +158,8 @@ int main()
     for (std::size_t y{ 0 }; y < image_height; y++) {
         for (std::size_t x{ 0 }; x < image_width; x++) {
 
-            image[x + y * image_height] = regularSample(x, y, spheres, num_spheres, planes, num_planes);
-            //image[x + y * image_height] = randomSample(x, y, spheres, num_spheres, planes, num_planes, 16);
+            image[x + y * image_height] = regularSample(x, y, planes, num_planes, spheres, num_spheres, triangles, num_triangles);
+            //image[x + y * image_height] = randomSample(x, y, planes, num_planes, spheres, num_spheres, triangles, num_triangles, 16);
         }
     }
 
