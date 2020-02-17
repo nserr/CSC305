@@ -135,7 +135,7 @@ int main()
     constexpr std::size_t image_height{ 600 };
     constexpr Colour background{ 0,0,0 };
 
-    constexpr Plane p1{ {300,200,100}, {0,1,0}, {0.67,0,1} };
+    constexpr Plane p1{ {0,400,100}, {0,1,1}, {0.67,0,1} };
     constexpr Plane p2{ {200,0,100}, {1,0,0}, {1,0,1} };
     constexpr Sphere s1{ {100,75,0}, 50, {1,0,0} };
     constexpr Sphere s2{ {280,150,0}, 75, {0,1,0} };

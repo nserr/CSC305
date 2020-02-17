@@ -107,9 +107,8 @@ public:
     {}
 
     bool hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& trace_data) const {
-        atlas::math::Vector norm_num{ glm::cross((b_ - a_), (c_ - a_)) };
-        atlas::math::Vector norm_denom{ glm::length(glm::cross((b_ - a_), (c_ - a_))) };
-        atlas::math::Vector norm = norm_num / norm_denom;
+        atlas::math::Vector norm_tmp{ glm::cross((b_ - a_), (c_ - a_)) };
+        atlas::math::Vector norm = glm::normalize(norm_tmp);
 
         float dot = glm::dot(norm, ray.d);
         if (fabs(dot) < 0.0001f) {
