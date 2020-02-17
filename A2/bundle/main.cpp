@@ -87,6 +87,41 @@ void Light::setColour(Colour const& c) {
     mColour = c;
 }
 
+// Plane Functions
+
+Plane::Plane(atlas::math::Point p, atlas::math::Normal norm) :
+    p_{p}, norm_{norm}
+{}
+
+bool Plane::hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& sr) const {
+    float t{ std::numeric_limits<float>::max() };
+    bool intersect{ intersectRay(ray, t) };
+
+    if (intersect && t < sr.t) {
+        sr.normal = norm_;
+        sr.ray = ray;
+        sr.colour = mColour;
+        sr.t = t;
+        sr.material = mMaterial;
+    }
+
+    return intersect;
+}
+
+bool Plane::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const {
+    const auto o_c{ p_ - ray.o };
+    const auto a{ glm::dot(o_c, norm_) };
+    const auto b = glm::dot(ray.d, norm_);
+    const auto t{ a / b };
+    
+    if (t > 0.0001f) {
+        tmin = t;
+        return true;
+    }
+    
+    return false;
+}
+
 // Sphere Functions
 
 Sphere::Sphere(atlas::math::Point center, float radius) :
@@ -155,6 +190,7 @@ bool Triangle::hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& s
         sr.ray = ray;
         sr.colour = mColour;
         sr.t = t;
+        //cout << t << "\n";
         sr.material = mMaterial;
     }
 
@@ -162,45 +198,39 @@ bool Triangle::hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& s
 }
 
 bool Triangle::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const {
-    atlas::math::Vector norm_tmp{ glm::cross((b_ - a_), (c_ - a_)) };
-    atlas::math::Normal norm = glm::normalize(norm_tmp);
+    const auto a{ a_.x - b_.x }, b{ a_.x - c_.x }, c{ ray.d.x }, d{ a_.x - ray.o.x };
+    const auto e{ a_.y - b_.y }, f{ a_.y - c_.y }, g{ ray.d.y }, h{ a_.y - ray.o.y };
+    const auto i{ a_.z - b_.z }, j{ a_.z - c_.z }, k{ ray.d.z }, l{ a_.z - ray.o.z };
 
-    float dot = glm::dot(norm, ray.d);
-    if (fabs(dot) < 0.0001f) {
+    const auto denom = a * (f * k - g * j) + b * (g * i - e * k) + c * (e * j - f * i);
+
+    const auto numBeta = d * (f * k - g * j) - b * (h * k - g * l) - c * (f * l - h * j);
+    const auto numGamma = a * (h * k - g * l) + d * (g * i - e * k) + c * (e * l - h * i);
+
+    const auto beta = numBeta / denom;
+    const auto gamma = numGamma / denom;
+    const auto sum = beta + gamma;
+
+    if (beta < 0 || beta > 1) {
         return false;
     }
 
-    float d = glm::dot(norm, a_);
-    float t = -(glm::dot(norm, ray.o) + d) / dot;
-
-    atlas::math::Vector cross;
-    atlas::math::Vector p{ (ray.o.x + t + ray.d.x), (ray.o.y + t + ray.d.y), (ray.o.z + t + ray.d.z) };
-
-    atlas::math::Vector e1{ (b_.x - a_.x), (b_.y - a_.y), (b_.z - a_.z) };
-    atlas::math::Vector vp1{ (p.x - a_.x), (p.y - a_.y), (p.z - a_.z) };
-
-    cross = glm::cross(e1, vp1);
-    if (glm::dot(norm, cross) < 0) {
+    if (gamma < 0 || gamma > 1) {
         return false;
     }
 
-    atlas::math::Vector e2{ (c_.x - b_.x), (c_.y - b_.y), (c_.z - b_.z) };
-    atlas::math::Vector vp2{ (p.x - b_.x), (p.y - b_.y), (p.z - b_.z) };
-
-    cross = glm::cross(e2, vp2);
-    if (glm::dot(norm, cross) < 0) {
+    if (sum < 0 || sum > 1) {
         return false;
     }
 
-    atlas::math::Vector e3{ (a_.x - c_.x), (a_.y - c_.y), (a_.z - c_.z) };
-    atlas::math::Vector vp3{ (p.x - c_.x), (p.y - c_.y), (p.z - c_.z) };
+    const auto numT = a * (f * l - h * j) - b * (e * l - h * i) + d * (e * j - f * i);
+    const auto t = numT / denom;
 
-    cross = glm::cross(e3, vp3);
-    if (glm::dot(norm, cross) < 0) {
+    /*if (t < 0.0001f) {
         return false;
-    }
+    }*/
 
-    tmin = t;
+    tmin = -t;
     return true;
 }
 
@@ -355,7 +385,7 @@ int main()
     world->background = { 0,0,0 };
     world->sampler = std::make_shared<Random>(4, 83);
 
-    world->scene.push_back(std::make_shared<Triangle>(Point{ 0,64,-600 }, Point{ 64,32,-600 }, Point{ -64,32,-600 }));
+    world->scene.push_back(std::make_shared<Sphere>(Point{ 0,0,-600 }, 128.0f));
     world->scene[0]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,0 }));
     world->scene[0]->setColour({ 1,0,0 });
 
@@ -366,6 +396,14 @@ int main()
     world->scene.push_back(std::make_shared<Sphere>(Point{ -128,32,-700 }, 64.0f));
     world->scene[2]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0,1,0 }));
     world->scene[2]->setColour({ 0,1,0 });
+
+    world->scene.push_back(std::make_shared<Plane>(Point{ 0,250,-100 }, Vector{ 0,1,1 }));
+    world->scene[3]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.98,0.89,0.72 }));
+    world->scene[3]->setColour({ 0.98,0.89,0.72 });
+
+    world->scene.push_back(std::make_shared<Triangle>(Point{ 0,-200,-700 }, Point{ -32,0,-700 }, Point{ 32,0,-700 }));
+    world->scene[4]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.5,1,1 }));
+    world->scene[4]->setColour({ 0.5,1,1 });
 
     world->ambient = std::make_shared<Ambient>();
     world->lights.push_back(std::make_shared<Directional>(Directional{ {0,0,1024} }));
