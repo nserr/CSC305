@@ -31,6 +31,106 @@ std::shared_ptr<Material> Shape::getMaterial() const {
     return mMaterial;
 }
 
+// Camera Functions
+
+Camera::Camera() :
+    mEye{ 0.0f, 0.0f, 500.0f },
+    mLookAt{ 0.0f },
+    mUp{ 0.0f, 1.0f, 0.0f },
+    mU{ 1.0f, 0.0f, 0.0f },
+    mV{ 0.0f, 1.0f, 0.0f },
+    mW{ 0.0f, 0.0f, 1.0f }
+{}
+
+void Camera::setEye(atlas::math::Point const& eye) {
+    mEye = eye;
+}
+
+void Camera::setLookAt(atlas::math::Point const& lookAt) {
+    mLookAt = lookAt;
+}
+
+void Camera::setUpVector(atlas::math::Vector const& up) {
+    mUp = up;
+}
+
+void Camera::computeUVW() {
+    mW = glm::normalize(mEye - mLookAt);
+    mU = glm::normalize(glm::cross(mUp, mW));
+    mV = glm::cross(mW, mU);
+
+    if (areEqual(mEye.x, mLookAt.x) && areEqual(mEye.z, mLookAt.z) && mEye.y > mLookAt.y) {
+        mU = { 0.0f, 0.0f, 1.0f };
+        mV = { 1.0f, 0.0f, 0.0f };
+        mW = { 0.0f, 1.0f, 0.0f };
+    }
+
+    if (areEqual(mEye.x, mLookAt.x) && areEqual(mEye.z, mLookAt.z) && mEye.y < mLookAt.y) {
+        mU = { 1.0f, 0.0f, 0.0f };
+        mV = { 0.0f, 0.0f, 1.0f };
+        mW = { 0.0f, -1.0f, 0.0f };
+    }
+}
+
+// Pinhole Functions
+
+Pinhole::Pinhole() : Camera{}, mDistance{ 500.0f }, mZoom{ 1.0f }
+{}
+
+void Pinhole::setDistance(float distance) {
+    mDistance = distance;
+}
+
+void Pinhole::setZoom(float zoom) {
+    mZoom = zoom;
+}
+
+atlas::math::Vector Pinhole::rayDirection(atlas::math::Point const& p) const {
+    const auto dir = p.x * mU + p.y * mV - mDistance * mW;
+    return glm::normalize(dir);
+}
+
+void Pinhole::renderScene(std::shared_ptr<World> world) const {
+    using atlas::math::Point;
+    using atlas::math::Ray;
+    using atlas::math::Vector;
+
+    Point samplePoint{}, pixelPoint{};
+    Ray<Vector> ray{};
+
+    ray.o = mEye;
+    float avg{ 1.0f / world->sampler->getNumSamples() };
+
+    for (int r{ 0 }; r < world->height; r++) {
+        for (int c{ 0 }; c < world->width; c++) {
+            Colour pixelAverage{ 0,0,0 };
+
+            for (int j{ 0 }; j < world->sampler->getNumSamples(); j++) {
+                ShadeRec trace_data{};
+                trace_data.world = world;
+                trace_data.t = std::numeric_limits<float>::max();
+                samplePoint = world->sampler->sampleUnitSquare();
+                pixelPoint.x = c - 0.5f * world->width + samplePoint.x;
+                pixelPoint.y = r - 0.5f * world->height + samplePoint.y;
+                ray.d = rayDirection(pixelPoint);
+                bool hit{};
+
+                for (auto const& obj : world->scene) {
+                    hit |= obj->hit(ray, trace_data);
+                }
+
+                if (hit) {
+                    pixelAverage += trace_data.material->shade(trace_data);
+                }
+            }
+
+            world->image.push_back({pixelAverage.r * avg,
+                                    pixelAverage.g * avg,
+                                    pixelAverage.b * avg});
+        }
+    }
+}
+
 // Sampler Functions
 
 Sampler::Sampler(int numSamples, int numSets) :
@@ -190,7 +290,6 @@ bool Triangle::hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& s
         sr.ray = ray;
         sr.colour = mColour;
         sr.t = t;
-        //cout << t << "\n";
         sr.material = mMaterial;
     }
 
@@ -211,26 +310,26 @@ bool Triangle::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, fl
     const auto gamma = numGamma / denom;
     const auto sum = beta + gamma;
 
-    if (beta < 0 || beta > 1) {
+    if (beta < 0) {
         return false;
     }
 
-    if (gamma < 0 || gamma > 1) {
+    if (gamma < 0) {
         return false;
     }
 
-    if (sum < 0 || sum > 1) {
+    if (sum > 1) {
         return false;
     }
 
     const auto numT = a * (f * l - h * j) - b * (e * l - h * i) + d * (e * j - f * i);
     const auto t = numT / denom;
 
-    /*if (t < 0.0001f) {
+    if (t < 0.0001f) {
         return false;
-    }*/
+    }
 
-    tmin = -t;
+    tmin = t;
     return true;
 }
 
@@ -397,56 +496,26 @@ int main()
     world->scene[2]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0,1,0 }));
     world->scene[2]->setColour({ 0,1,0 });
 
-    world->scene.push_back(std::make_shared<Plane>(Point{ 0,250,-100 }, Vector{ 0,1,1 }));
+    world->scene.push_back(std::make_shared<Plane>(Point{ 0,250,-800 }, Vector{ 0,0,1 }));
     world->scene[3]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.98,0.89,0.72 }));
     world->scene[3]->setColour({ 0.98,0.89,0.72 });
 
-    world->scene.push_back(std::make_shared<Triangle>(Point{ 0,-200,-700 }, Point{ -32,0,-700 }, Point{ 32,0,-700 }));
-    world->scene[4]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.5,1,1 }));
-    world->scene[4]->setColour({ 0.5,1,1 });
+    world->scene.push_back(std::make_shared<Triangle>(Point{ -300,-200,-700 }, Point{ -350,0,-700 }, Point{ -250,0,-700 }));
+    world->scene[4]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,0 }));
+    world->scene[4]->setColour({ 1,0,0 });
 
     world->ambient = std::make_shared<Ambient>();
-    world->lights.push_back(std::make_shared<Directional>(Directional{ {0,0,1024} }));
-
     world->ambient->setColour({ 1,1,1 });
     world->ambient->scaleRadiance(0.05f);
 
+    world->lights.push_back(std::make_shared<Directional>(Directional{ {0,0,1024} }));
     world->lights[0]->setColour({ 1,1,1 });
     world->lights[0]->scaleRadiance(4.0f);
 
-    Point samplePoint{}, pixelPoint{};
-    Ray<Vector> ray{ {0,0,0}, {0,0,-1} };
-
-    float avg{ 1.0f / world->sampler->getNumSamples() };
-
-    for (int r{ 0 }; r < world->height; r++) {
-        for (int c{ 0 }; c < world->width; c++) {
-            Colour pixelAverage{ 0,0,0 };
-
-            for (int i{ 0 }; i < world->sampler->getNumSamples(); i++) {
-                ShadeRec trace_data{};
-                trace_data.world = world;
-                trace_data.t = std::numeric_limits<float>::max();
-                samplePoint = world->sampler->sampleUnitSquare();
-                pixelPoint.x = c - 0.5f * world->width + samplePoint.x;
-                pixelPoint.y = r - 0.5f * world->height + samplePoint.y;
-                ray.o = Vector{ pixelPoint.x, pixelPoint.y, 0 };
-                bool hit{};
-
-                for (auto obj : world->scene) {
-                    hit |= obj->hit(ray, trace_data);
-                }
-
-                if (hit) {
-                    pixelAverage += trace_data.material->shade(trace_data);
-                }
-            }
-
-            world->image.push_back({pixelAverage.r * avg,
-                                    pixelAverage.g * avg,
-                                    pixelAverage.b * avg});
-        }
-    }
+    Pinhole camera{};
+    camera.setEye({ 150.0f, 150.0f, 500.0f });
+    camera.computeUVW();
+    camera.renderScene(world);
 
     saveToBMP("C:/Users/noahs/OneDrive/Desktop/School/CSC 305/Assignments/A2/bundle/raytrace.bmp", world->width, world->height, world->image);
     return 0;

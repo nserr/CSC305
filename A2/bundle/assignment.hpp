@@ -55,6 +55,27 @@ struct ShadeRec {
     std::shared_ptr<World> world;
 };
 
+class Camera {
+public:
+    Camera();
+    virtual ~Camera() = default;
+
+    virtual void renderScene(std::shared_ptr<World> world) const = 0;
+
+    void setEye(atlas::math::Point const& eye);
+    void setLookAt(atlas::math::Point const& lookAt);
+    void setUpVector(atlas::math::Point const& up);
+
+    void computeUVW();
+
+protected:
+    atlas::math::Point mEye;
+    atlas::math::Point mLookAt;
+    atlas::math::Point mUp;
+    atlas::math::Vector mU, mV, mW;
+
+};
+
 class Sampler {
 public:
     Sampler(int numSamples, int numSets);
@@ -173,6 +194,21 @@ private:
     atlas::math::Point a_;
     atlas::math::Point b_;
     atlas::math::Point c_;
+};
+
+class Pinhole : public Camera {
+public:
+    Pinhole();
+
+    void setDistance(float distance);
+    void setZoom(float zoom);
+
+    atlas::math::Vector rayDirection(atlas::math::Point const& p) const;
+    void renderScene(std::shared_ptr<World> world) const;
+
+private:
+    float mDistance;
+    float mZoom;
 };
 
 class Regular : public Sampler {
