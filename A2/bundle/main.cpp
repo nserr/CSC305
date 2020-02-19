@@ -122,14 +122,10 @@ void Pinhole::renderScene(std::shared_ptr<World> world) const {
                 if (hit) {
                     // Out-of-Gamut handling (max-to-one)
                     Colour tmp = trace_data.material->shade(trace_data);
+                    float max = std::max(std::max(tmp.r, tmp.g), tmp.b);
 
-                    if (tmp.r > 1 || tmp.g > 1 || tmp.b > 1) {
-                        float max = std::max(tmp.r, tmp.g);
-                        max = std::max(max, tmp.b);
-                        
-                        tmp.r /= max;
-                        tmp.g /= max;
-                        tmp.b /= max;
+                    if (max > 1.0) {
+                        tmp /= max;
                     }
 
                     pixelAverage += tmp;
@@ -498,11 +494,11 @@ atlas::math::Vector Directional::getDirection([[maybe_unused]] ShadeRec& sr) {
 Point::Point() : Light{}
 {}
 
-Point::Point(atlas::math::Point const& loc) : Light{} {
+Point::Point(atlas::math::Vector const& loc) : Light{} {
     setLocation(loc);
 }
 
-void Point::setLocation(atlas::math::Point const& loc) {
+void Point::setLocation(atlas::math::Vector const& loc) {
     mLoc = loc;
 }
 
@@ -575,33 +571,42 @@ int main()
     world->scene[8]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.27,0.45,1 }));
     world->scene[8]->setColour({ 0.27,0.45,1 });
     
-
-    world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ 0,100,-400 }, atlas::math::Point{ 50,200,-400 }, atlas::math::Point{ -50,200,-400 }));
-    world->scene[9]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,0 }));
+    world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ -300,-250,-400 }, atlas::math::Point{ -350,-350,-400 }, atlas::math::Point{ -250,-350,-400 }));
+    world->scene[9]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,1 }));
     world->scene[9]->setColour({ 1,0,0 });
 
-    /*world->scene.push_back(std::make_shared<Plane>(atlas::math::Point{ 0,0,-2000 }, Vector{ 0,1,1 }));
-    world->scene[10]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));
-    world->scene[10]->setColour({ 1,1,1 });*/
+    world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ 300,250,-400 }, atlas::math::Point{ 350,350,-400 }, atlas::math::Point{ 250,350,-400 }));
+    world->scene[10]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,1 }));
+    world->scene[10]->setColour({ 1,0,0 });
+
+    world->scene.push_back(std::make_shared<Plane>(atlas::math::Point{ 0,300,-900 }, Vector{ 0,1,0 }));
+    world->scene[11]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));
+    world->scene[11]->setColour({ 1,1,1 });
 
     world->ambient = std::make_shared<Ambient>();
     world->ambient->setColour({ 1,1,1 });
-    world->ambient->scaleRadiance(0.1f);
+    world->ambient->scaleRadiance(4.0f);
 
-    world->lights.push_back(std::make_shared<Directional>(Directional{ {0,0,1024} }));
+    world->lights.push_back(std::make_shared<Point>(Point{ { -600,300,-400 } }));
     world->lights[0]->setColour({ 1,1,1 });
-    world->lights[0]->scaleRadiance(5.0f);
-
-   /* world->lights.push_back(std::make_shared<Point>(Point{ {0,0,1024} }));
-    world->lights[0]->setColour({ 1,1,1 });
-    world->lights[0]->scaleRadiance(1.0f);*/
+    world->lights[0]->scaleRadiance(1.0f);
 
     Pinhole camera{};
     camera.setEye({ 0.0f, 0.0f, 300.0f });
     camera.computeUVW();
     camera.renderScene(world);
 
-    saveToBMP("C:/Users/noahs/OneDrive/Desktop/School/CSC 305/Assignments/A2/bundle/raytrace.bmp", world->width, world->height, world->image);
+    saveToBMP("C:/Users/noahs/OneDrive/Desktop/School/CSC 305/Assignments/A2/bundle/point.bmp", world->width, world->height, world->image);
+
+    world->image.clear();
+    world->lights.clear();
+    world->lights.push_back(std::make_shared<Directional>(Directional{ {0,0,1024} }));
+    world->lights[0]->setColour({ 1,1,1 });
+    world->lights[0]->scaleRadiance(4.0f);
+
+    camera.renderScene(world);
+
+    saveToBMP("C:/Users/noahs/OneDrive/Desktop/School/CSC 305/Assignments/A2/bundle/directional.bmp", world->width, world->height, world->image);
     return 0;
 }
 

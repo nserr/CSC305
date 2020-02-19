@@ -287,14 +287,14 @@ private:
 class Point : public Light {
 public:
     Point();
-    Point(atlas::math::Point const& loc);
+    Point(atlas::math::Vector const& loc);
 
     void setLocation(atlas::math::Point const& loc);
 
     atlas::math::Vector getDirection(ShadeRec& sr) override;
 
 private:
-    atlas::math::Point mLoc;
+    atlas::math::Vector mLoc;
 };
 
 class Ambient : public Light {
