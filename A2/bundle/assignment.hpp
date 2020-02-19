@@ -225,6 +225,13 @@ public:
     void generateSamples();
 };
 
+class Jittered : public Sampler {
+public:
+    Jittered(int numSamples, int numSets);
+
+    void generateSamples();
+};
+
 class Lambertian : public BRDF {
 public:
     Lambertian();
@@ -275,6 +282,19 @@ public:
 
 private:
     atlas::math::Vector mDirection;
+};
+
+class Point : public Light {
+public:
+    Point();
+    Point(atlas::math::Point const& loc);
+
+    void setLocation(atlas::math::Point const& loc);
+
+    atlas::math::Vector getDirection(ShadeRec& sr) override;
+
+private:
+    atlas::math::Point mLoc;
 };
 
 class Ambient : public Light {

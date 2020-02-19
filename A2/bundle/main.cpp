@@ -120,7 +120,19 @@ void Pinhole::renderScene(std::shared_ptr<World> world) const {
                 }
 
                 if (hit) {
-                    pixelAverage += trace_data.material->shade(trace_data);
+                    // Out-of-Gamut handling (max-to-one)
+                    Colour tmp = trace_data.material->shade(trace_data);
+
+                    if (tmp.r > 1 || tmp.g > 1 || tmp.b > 1) {
+                        float max = std::max(tmp.r, tmp.g);
+                        max = std::max(max, tmp.b);
+                        
+                        tmp.r /= max;
+                        tmp.g /= max;
+                        tmp.b /= max;
+                    }
+
+                    pixelAverage += tmp;
                 }
             }
 
@@ -274,7 +286,7 @@ bool Sphere::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, floa
 
 // Triangle Functions
 
-Triangle::Triangle(atlas::math::Point p1, atlas::math::Point p2, atlas::math::Point p3) : 
+Triangle::Triangle(atlas::math::Point p1, atlas::math::Point p2, atlas::math::Point p3) :
     a_{p1}, b_{p2}, c_{p3}
 {}
 
@@ -364,6 +376,25 @@ void Random::generateSamples() {
         for (int j{ 0 }; j < mNumSamples; j++) {
             mSamples.push_back(atlas::math::Point{
                 engine.getRandomOne(), engine.getRandomOne(), 0.0f });
+        }
+    }
+}
+
+// Jittered Sample Functions
+
+Jittered::Jittered(int numSamples, int numSets) : Sampler{ numSamples, numSets } {
+    generateSamples();
+}
+
+void Jittered::generateSamples() {
+    int n = static_cast<int>(glm::sqrt(static_cast<float>(mNumSamples)));
+    atlas::math::Random<float> engine;
+
+    for (int i{ 0 }; i < mNumSets; i++) {
+        for (int j{ 0 }; j < n; j++) {
+            for (int k{ 0 }; k < n; k++) {
+                mSamples.push_back(atlas::math::Point{ (k + engine.getRandomOne()) / n, (j + engine.getRandomOne()) / n, 0.0f });
+            }
         }
     }
 }
@@ -462,6 +493,23 @@ atlas::math::Vector Directional::getDirection([[maybe_unused]] ShadeRec& sr) {
     return mDirection;
 }
 
+// Point Functions
+
+Point::Point() : Light{}
+{}
+
+Point::Point(atlas::math::Point const& loc) : Light{} {
+    setLocation(loc);
+}
+
+void Point::setLocation(atlas::math::Point const& loc) {
+    mLoc = loc;
+}
+
+atlas::math::Vector Point::getDirection([[maybe_unused]] ShadeRec& sr) {
+    return (mLoc - sr.t);
+}
+
 // Ambient Functions
 
 Ambient::Ambient() : Light{}
@@ -471,10 +519,8 @@ atlas::math::Vector Ambient::getDirection([[maybe_unused]] ShadeRec& sr) {
     return atlas::math::Vector{ 0.0f };
 }
 
-
 int main()
 {
-    using atlas::math::Point;
     using atlas::math::Ray;
     using atlas::math::Vector;
 
@@ -482,38 +528,76 @@ int main()
     world->width = 600;
     world->height = 600;
     world->background = { 0,0,0 };
-    world->sampler = std::make_shared<Random>(4, 83);
+    world->sampler = std::make_shared<Jittered>(4, 83);
 
-    world->scene.push_back(std::make_shared<Sphere>(Point{ 0,0,-600 }, 128.0f));
-    world->scene[0]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,0 }));
-    world->scene[0]->setColour({ 1,0,0 });
+    // Sun
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-50,-700 }, 225.0f));
+    world->scene[0]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0.8,0.16 }));
+    world->scene[0]->setColour({ 1,0.8,0.16 });
 
-    world->scene.push_back(std::make_shared<Sphere>(Point{ 128,32,-700 }, 64.0f));
-    world->scene[1]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0,0,1 }));
-    world->scene[1]->setColour({ 0,0,1 });
+    // Mercury
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ -450,-75,-800 }, 50.0f));
+    world->scene[1]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.62,0.6,0.6 }));
+    world->scene[1]->setColour({ 0.62,0.6,0.6 });
 
-    world->scene.push_back(std::make_shared<Sphere>(Point{ -128,32,-700 }, 64.0f));
-    world->scene[2]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0,1,0 }));
-    world->scene[2]->setColour({ 0,1,0 });
+    // Venus
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ -250,-225,-800 }, 60.0f));
+    world->scene[2]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.76,0.57,0.22 }));
+    world->scene[2]->setColour({ 0.76,0.57,0.22 });
 
-    world->scene.push_back(std::make_shared<Plane>(Point{ 0,250,-800 }, Vector{ 0,0,1 }));
-    world->scene[3]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.98,0.89,0.72 }));
-    world->scene[3]->setColour({ 0.98,0.89,0.72 });
+    // Earth
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-300,-800 }, 70.0f));
+    world->scene[3]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.12,0.25,0.83 }));
+    world->scene[3]->setColour({ 0.12,0.25,0.83 });
 
-    world->scene.push_back(std::make_shared<Triangle>(Point{ -300,-200,-700 }, Point{ -350,0,-700 }, Point{ -250,0,-700 }));
-    world->scene[4]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,0 }));
-    world->scene[4]->setColour({ 1,0,0 });
+    // Mars
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 250,-200,-600 }, 50.0f));
+    world->scene[4]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.64,0.39,0.28 }));
+    world->scene[4]->setColour({ 0.64,0.39,0.28 });
+
+    // Jupiter
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 375,32,-600 }, 110.0f));
+    world->scene[5]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.81,0.78,0.69 }));
+    world->scene[5]->setColour({ 0.81,0.78,0.69 });
+
+    // Saturn
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 125,175,-500 }, 95.0f));
+    world->scene[6]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.79,0.68,0.46 }));
+    world->scene[6]->setColour({ 0.79,0.68,0.46 });
+
+    // Uranus
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ -125,175,-500 }, 80.0f));
+    world->scene[7]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.78,0.93,0.94 }));
+    world->scene[7]->setColour({ 0.78,0.93,0.94 });
+
+    // Neptune
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ -300,75,-600 }, 75.0f));
+    world->scene[8]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.27,0.45,1 }));
+    world->scene[8]->setColour({ 0.27,0.45,1 });
+    
+
+    world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ 0,100,-400 }, atlas::math::Point{ 50,200,-400 }, atlas::math::Point{ -50,200,-400 }));
+    world->scene[9]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,0 }));
+    world->scene[9]->setColour({ 1,0,0 });
+
+    /*world->scene.push_back(std::make_shared<Plane>(atlas::math::Point{ 0,0,-2000 }, Vector{ 0,1,1 }));
+    world->scene[10]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));
+    world->scene[10]->setColour({ 1,1,1 });*/
 
     world->ambient = std::make_shared<Ambient>();
     world->ambient->setColour({ 1,1,1 });
-    world->ambient->scaleRadiance(0.05f);
+    world->ambient->scaleRadiance(0.1f);
 
     world->lights.push_back(std::make_shared<Directional>(Directional{ {0,0,1024} }));
     world->lights[0]->setColour({ 1,1,1 });
-    world->lights[0]->scaleRadiance(4.0f);
+    world->lights[0]->scaleRadiance(5.0f);
+
+   /* world->lights.push_back(std::make_shared<Point>(Point{ {0,0,1024} }));
+    world->lights[0]->setColour({ 1,1,1 });
+    world->lights[0]->scaleRadiance(1.0f);*/
 
     Pinhole camera{};
-    camera.setEye({ 150.0f, 150.0f, 500.0f });
+    camera.setEye({ 0.0f, 0.0f, 300.0f });
     camera.computeUVW();
     camera.renderScene(world);
 
