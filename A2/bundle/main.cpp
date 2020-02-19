@@ -603,7 +603,8 @@ int main()
     world->lights.clear();
     world->lights.push_back(std::make_shared<Directional>(Directional{ {0,0,1024} }));
     world->lights[0]->setColour({ 1,1,1 });
-    world->lights[0]->scaleRadiance(4.0f);
+    world->lights[0]->scaleRadiance(3.0f);
+    world->ambient->scaleRadiance(4.0f);
     camera.renderScene(world);
 
     saveToBMP("C:/Users/noahs/OneDrive/Desktop/School/CSC 305/Assignments/A2/bundle/directional.bmp", world->width, world->height, world->image);
