@@ -503,7 +503,8 @@ void Point::setLocation(atlas::math::Vector const& loc) {
 }
 
 atlas::math::Vector Point::getDirection([[maybe_unused]] ShadeRec& sr) {
-    return (mLoc - sr.t);
+    auto tmp = sr.ray.o + (sr.t * sr.ray.d);
+    return glm::normalize(mLoc - tmp);
 }
 
 // Ambient Functions
@@ -572,24 +573,24 @@ int main()
     world->scene[8]->setColour({ 0.27,0.45,1 });
     
     world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ -300,-250,-400 }, atlas::math::Point{ -350,-350,-400 }, atlas::math::Point{ -250,-350,-400 }));
-    world->scene[9]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,1 }));
-    world->scene[9]->setColour({ 1,0,0 });
+    world->scene[9]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));
+    world->scene[9]->setColour({ 1,1,1 });
 
     world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ 300,250,-400 }, atlas::math::Point{ 350,350,-400 }, atlas::math::Point{ 250,350,-400 }));
-    world->scene[10]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0,1 }));
-    world->scene[10]->setColour({ 1,0,0 });
+    world->scene[10]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0,0,0 }));
+    world->scene[10]->setColour({ 0,0,0 });
 
-    world->scene.push_back(std::make_shared<Plane>(atlas::math::Point{ 0,300,-900 }, Vector{ 0,1,0 }));
+    world->scene.push_back(std::make_shared<Plane>(atlas::math::Point{ 0,300,-900 }, Vector{ 0,-1,0 }));
     world->scene[11]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));
     world->scene[11]->setColour({ 1,1,1 });
 
     world->ambient = std::make_shared<Ambient>();
     world->ambient->setColour({ 1,1,1 });
-    world->ambient->scaleRadiance(4.0f);
+    world->ambient->scaleRadiance(0.5f);
 
-    world->lights.push_back(std::make_shared<Point>(Point{ { -600,300,-400 } }));
+    world->lights.push_back(std::make_shared<Point>(Point{ { -300,-300,500 } }));
     world->lights[0]->setColour({ 1,1,1 });
-    world->lights[0]->scaleRadiance(1.0f);
+    world->lights[0]->scaleRadiance(5.0f);
 
     Pinhole camera{};
     camera.setEye({ 0.0f, 0.0f, 300.0f });
@@ -603,7 +604,6 @@ int main()
     world->lights.push_back(std::make_shared<Directional>(Directional{ {0,0,1024} }));
     world->lights[0]->setColour({ 1,1,1 });
     world->lights[0]->scaleRadiance(4.0f);
-
     camera.renderScene(world);
 
     saveToBMP("C:/Users/noahs/OneDrive/Desktop/School/CSC 305/Assignments/A2/bundle/directional.bmp", world->width, world->height, world->image);
