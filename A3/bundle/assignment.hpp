@@ -10,11 +10,15 @@
 #include <atlas/glx/Context.hpp>
 #include <atlas/glx/ErrorCallback.hpp>
 #include <atlas/glx/GLSL.hpp>
+#include <atlas/utils/Cameras.hpp>
 
 #include <fmt/printf.h>
 #include <magic_enum.hpp>
 
 using namespace atlas;
+
+static constexpr float nearVal{ 1.0f };
+static constexpr float farVal{ 10000000000.0f };
 
 static const std::vector<std::string> IncludeDir{ ShaderPath };
 
@@ -35,11 +39,14 @@ public:
 
     void reloadShaders();
 
-    void render();
+    void render(bool paused, float xMovement, float zMovement, float xLookAt, float yLookAt, int width, int height);
 
     void freeGPUData();
 
 private:
+    void setupUniformVariables();
+    float position;
+
     // Vertex buffers.
     GLuint mVao;
     GLuint mVbo;
@@ -50,6 +57,10 @@ private:
     GLuint mProgramHandle;
     glx::ShaderFile vertexSource;
     glx::ShaderFile fragmentSource;
+
+    GLuint mUniformModelLoc;
+    GLuint mUniformViewLoc;
+    GLuint mUniformProjectionLoc;
 };
 
 class Program
@@ -72,4 +83,10 @@ private:
     GLFWwindow* mWindow;
     glx::WindowSettings settings;
     glx::WindowCallbacks callbacks;
+
+    bool paused;
+    float xMovement;
+    float zMovement;
+    float xLookAt;
+    float yLookAt;
 };
