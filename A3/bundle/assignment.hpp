@@ -31,7 +31,7 @@ public:
 
     void loadShaders();
 
-    void loadDataToGPU(std::array<float, 18> const& vertices);
+    void loadDataToGPU(std::array<float, 18*12> const& vertices);
 
     void reloadShaders();
 
@@ -57,7 +57,7 @@ class Program
 public:
     Program(int width, int height, std::string title);
 
-    void run(Triangle& triangles);
+    void run(Triangle& tri);
 
     void freeGPUData();
 

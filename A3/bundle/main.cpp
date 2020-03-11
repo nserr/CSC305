@@ -1,5 +1,4 @@
 #include "assignment.hpp"
-#include "build/_deps/glfw-src/deps/glad/gl.h"
 
 // ===---------------TRIANGLE-----------------===
 
@@ -30,7 +29,7 @@ void Triangle::loadShaders()
 }
 
 void Triangle::loadDataToGPU(
-    [[maybe_unused]] std::array<float, 18> const& vertices)
+    [[maybe_unused]] std::array<float, 18*12> const& vertices)
 {
     glCreateBuffers(1, &mVbo);
     glNamedBufferStorage(mVbo, glx::size<float>(vertices.size()), vertices.data(), 0);
@@ -62,7 +61,7 @@ void Triangle::render()
     reloadShaders();
     glUseProgram(mProgramHandle);
     glBindVertexArray(mVao);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawArrays(GL_TRIANGLES, 0, 3*12);
 }
 
 void Triangle::freeGPUData()
@@ -108,6 +107,10 @@ void Program::run(Triangle& tri)
         glViewport(0, 0, width, height);
         // tell OpenGL the what color to clear the screen to
         glClearColor(0, 0, 0, 1);
+        // enable depth testing 
+        glEnable(GL_DEPTH_TEST);
+        // accept fragment if closest to camera
+        glDepthFunc(GL_LESS);
         // actually clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -146,16 +149,61 @@ int main()
     try
     {
         // clang-format off
-        std::array<float, 18> vertices =
+        std::array<float, 18*12> vertices =
         {
             // Vertices          Colours
-            0.5f, -0.5f, 0.0f,   1.0f, 0.0f, 0.0f,
-           -0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,
-            0.0f,  0.5f, 0.0f,   0.0f, 0.0f, 1.0f
+           -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+           -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 0.0f,
+           -0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+           -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+           -0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f,
+           -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+            0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+            0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+           -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+
+           -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+           -0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f,
+           -0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f,
+           -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 0.0f,
+           -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+
+           -0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f,
+           -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 0.0f,
+            0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f,
+            0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+            0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+            0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f,
+            0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f,
+            0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+           -0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f,
+           -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+           -0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 1.0f,
+
+            0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f,
+           -0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f,
+            0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f,
         };
+
         // clang-format on
 
-        Program prog{ 1280, 720, "CSC305 Lab 5" };
+        Program prog{ 1280, 720, "CSC 305 Assignment 3" };
         Triangle tri{};
 
         tri.loadShaders();
