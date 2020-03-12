@@ -24,7 +24,7 @@ First OpenGL project. Includes:
 - point lighting
 - diffuse shading
 - a first-person view camera
- - WASD controls the camera position
- - arrows control the camera's viewpoint
- - spacebar spins the cube
+  - WASD controls the camera position
+  - arrows control the camera's viewpoint
+  - spacebar spins the cube
 
