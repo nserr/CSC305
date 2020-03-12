@@ -1,3 +1,9 @@
+/*
+ * CSC 305 Assignment 3
+ * Noah Serr
+ * V00891494
+ */
+
 #pragma once
 
 #include "paths.hpp"
