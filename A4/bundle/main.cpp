@@ -230,6 +230,7 @@ bool Plane::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, float
     return false;
 }
 
+
 // Sphere Functions
 
 Sphere::Sphere(atlas::math::Point center, float radius) :
@@ -341,6 +342,29 @@ bool Triangle::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, fl
     return true;
 }
 
+// Sampler Functions
+
+void Sampler::mapSamplesToHemisphere(const float e) {
+    size_t samplesSize = mSamples.size();
+    int size = static_cast<int>(samplesSize);
+
+    hemisphereSamples.reserve(mNumSamples * mNumSets);
+
+    for (int i{ 0 }; i < size; i++) {
+        float cosPhi = cos(2.0f * glm::pi<float>() * mSamples[i].x);
+        float sinPhi = sin(2.0f * glm::pi<float>() * mSamples[i].x);
+        
+        float cosTheta = glm::pow((1.0f - mSamples[i].y), 1.0f / (e + 1.0f));
+        float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+
+        float pu = sinTheta * cosPhi;
+        float pv = sinTheta * sinPhi;
+        float pw = cosTheta;
+
+        hemisphereSamples.push_back(atlas::math::Point(pu, pv, pw));
+    }
+}
+
 // Regular Sample Functions
 
 Regular::Regular(int numSamples, int numSets) : Sampler{ numSamples, numSets } {
@@ -425,6 +449,50 @@ void Lambertian::setDiffuseReflection(float kd) {
     mDiffuseReflection = kd;
 }
 
+// Glossy Specular Functions
+
+GlossySpecular::GlossySpecular() : mKs{}, mCs{}, mExp{}
+{}
+
+GlossySpecular::GlossySpecular(float ks, Colour cs, float exp) : mKs{ks}, mCs{cs}, mExp{exp}
+{}
+
+Colour GlossySpecular::fn([[maybe_unused]] ShadeRec const& sr,
+    [[maybe_unused]] atlas::math::Vector const& reflected,
+    [[maybe_unused]] atlas::math::Vector const& incoming) const {
+
+    const float epsilon = 0.0001f;
+    float nWi{ glm::dot(sr.normal, incoming) };
+    
+    atlas::math::Vector r{ 2.0f * sr.normal * nWi - incoming };
+    float rWo{ glm::dot(r, reflected) };
+
+    if (rWo > epsilon) {
+        return mCs * mKs * glm::pow<float, float>(rWo, mExp);
+    }
+    else {
+        return Colour{ 0,0,0 };
+    }
+}
+
+Colour GlossySpecular::rho([[maybe_unused]] ShadeRec const& sr,
+    [[maybe_unused]] atlas::math::Vector const& reflected) const {
+
+    return Colour{ 0,0,0 };
+}
+
+void GlossySpecular::setSpecularReflection(float ks) {
+    mKs = ks;
+}
+
+void GlossySpecular::setSpecularColour(Colour cs) {
+    mCs = cs;
+}
+
+void GlossySpecular::setExp(float exp) {
+    mExp = exp;
+}
+
 // Matte Functions
 
 Matte::Matte() :
@@ -466,6 +534,65 @@ Colour Matte::shade(ShadeRec& sr) {
 
         if (nDotWi > 0.0f) {
             L += mDiffuseBRDF->fn(sr, wo, wi) * sr.world->lights[i]->L(sr) * nDotWi;
+        }
+    }
+
+    return L;
+}
+
+// Phong Functions
+
+Phong::Phong() : Material{}, diffuse{Lambertian()}, ambient{Lambertian()}, specular{GlossySpecular()}
+{}
+
+Phong::Phong(float ka, float kd, Colour c, float ks, Colour cs, float exp) : Phong{} {
+    setDiffuseReflection(kd);
+    setAmbientReflection(ka);
+    setDiffuseColour(c);
+    setSpecularReflection(ks);
+    setSpecularColour(cs);
+    setExp(exp);
+}
+
+void Phong::setDiffuseReflection(float dr) {
+    diffuse.setDiffuseReflection(dr);
+}
+
+void Phong::setAmbientReflection(float ar) {
+    ambient.setDiffuseReflection(ar);
+}
+
+void Phong::setDiffuseColour(Colour c) {
+    diffuse.setDiffuseColour(c);
+    ambient.setDiffuseColour(c);
+}
+
+void Phong::setSpecularReflection(float ks) {
+    specular.setSpecularReflection(ks);
+}
+
+void Phong::setSpecularColour(Colour cs) {
+    specular.setSpecularColour(cs);
+}
+
+void Phong::setExp(float exp) {
+    specular.setExp(exp);
+}
+
+Colour Phong::shade(ShadeRec& sr) {
+    using atlas::math::Ray;
+    using atlas::math::Vector;
+
+    Vector wo = -sr.ray.d;
+    Colour L = ambient.rho(sr, wo) * sr.world->ambient->L(sr);
+    size_t numLights = sr.world->lights.size();
+
+    for (size_t i{ 0 }; i < numLights; i++) {
+        Vector wi = sr.world->lights[i]->getDirection(sr);
+        float nDotWi = glm::dot(sr.normal, wi);
+
+        if (nDotWi > 0.0f) {
+            L += diffuse.fn(sr, wo, wi) + specular.fn(sr, wo, wi) * sr.world->lights[i]->L(sr) * nDotWi;
         }
     }
 
@@ -529,7 +656,7 @@ int main()
 
     // Sun
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-50,-700 }, 225.0f));
-    world->scene[0]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0.8,0.16 }));
+    world->scene[0]->setMaterial(std::make_shared<Phong>(0.2f, 0.5f, Colour{ 1,0.8,0.16 }, 0.2f, Colour{ 1,0.8,0.16 }, 3.0f));
     world->scene[0]->setColour({ 1,0.8,0.16 });
 
     // Mercury
@@ -588,7 +715,7 @@ int main()
     world->ambient->setColour({ 1,1,1 });
     world->ambient->scaleRadiance(0.5f);
 
-    world->lights.push_back(std::make_shared<Point>(Point{ { -300,-300,500 } }));
+    world->lights.push_back(std::make_shared<Point>(Point{ { 0,-500,200 } }));
     world->lights[0]->setColour({ 1,1,1 });
     world->lights[0]->scaleRadiance(5.0f);
 

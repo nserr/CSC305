@@ -90,9 +90,12 @@ public:
 
     atlas::math::Point sampleUnitSquare();
 
+    void mapSamplesToHemisphere(const float e);
+
 protected:
     std::vector<atlas::math::Point> mSamples;
     std::vector<int> mShuffledIndices;
+    std::vector<atlas::math::Point> hemisphereSamples;
 
     int mNumSamples;
     int mNumSets;
@@ -254,6 +257,30 @@ private:
     float mDiffuseReflection;
 };
 
+class GlossySpecular : public BRDF {
+public:
+    GlossySpecular();
+    GlossySpecular(float ks, Colour cs, float exp);
+
+    Colour fn(ShadeRec const& sr,
+        atlas::math::Vector const& reflected,
+        atlas::math::Vector const& incoming) const;
+
+    Colour rho(ShadeRec const& sr,
+        atlas::math::Vector const& reflected) const;
+
+    void setSpecularReflection(float ks);
+
+    void setSpecularColour(Colour cs);
+
+    void setExp(float exp);
+
+private:
+    float mKs;
+    Colour mCs;
+    float mExp;
+};
+
 class Matte : public Material {
 public:
     Matte();
@@ -265,17 +292,36 @@ public:
 
     void setDiffuseColour(Colour colour);
 
-    Colour shade(ShadeRec& sr) override;
+    Colour shade(ShadeRec& sr);
 
 private:
     std::shared_ptr<Lambertian> mDiffuseBRDF;
     std::shared_ptr<Lambertian> mAmbientBRDF;
 };
 
-class Mirror : public Material {
+class Phong : public Material {
 public:
+    Phong();
+    Phong(float ka, float kd, Colour c, float ks, Colour cs, float exp);
+
+    void setDiffuseReflection(float dr);
+
+    void setAmbientReflection(float ar);
+
+    void setDiffuseColour(Colour c);
+
+    void setSpecularReflection(float ks);
+
+    void setSpecularColour(Colour cs);
+
+    void setExp(float exp);
+
+    Colour shade(ShadeRec& sr);
 
 private:
+    Lambertian ambient;
+    Lambertian diffuse;
+    GlossySpecular specular;
 };
 
 class Directional : public Light {
