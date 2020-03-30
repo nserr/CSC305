@@ -696,6 +696,9 @@ bool Directional::inShadow([[maybe_unused]] atlas::math::Ray<atlas::math::Vector
     return false;
 }
 
+void Directional::setSampler([[maybe_unused]] std::shared_ptr<Sampler> sPtr)
+{}
+
 // Point Functions
 
 Point::Point() : Light{}
@@ -739,6 +742,9 @@ bool Point::inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec 
     return false;
 }
 
+void Point::setSampler([[maybe_unused]] std::shared_ptr<Sampler> sPtr)
+{}
+
 // Ambient Functions
 
 Ambient::Ambient() : Light{}
@@ -757,6 +763,64 @@ bool Ambient::inShadow([[maybe_unused]] atlas::math::Ray<atlas::math::Vector> co
     return false;
 }
 
+void Ambient::setSampler([[maybe_unused]] std::shared_ptr<Sampler> sPtr)
+{}
+
+// Ambient Occluder Functions
+
+AmbientOccluder::AmbientOccluder() : Light{}
+{}
+
+void AmbientOccluder::setSampler(std::shared_ptr<Sampler> sPtr) {
+    if (mSPtr) {
+        mSPtr = NULL;
+    }
+
+    mSPtr = sPtr;
+    mSPtr->mapSamplesToHemisphere(1);
+}
+
+atlas::math::Vector AmbientOccluder::getDirection([[maybe_unused]] ShadeRec& sr) {
+    atlas::math::Point sp = mSPtr->sampleUnitSquare();
+    return (sp.x * u + sp.y * v + sp.z * w);
+}
+
+bool AmbientOccluder::inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const {
+    float t;
+    int numObjects = static_cast<int>(sr.world->scene.size());
+
+    for (int i{ 0 }; i < numObjects; i++) {
+        if (sr.world->scene[i]->shadowHit(ray, t)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+Colour AmbientOccluder::L(ShadeRec& sr) {
+    atlas::math::Vector tmp(0.0072f, 1.0f, 0.0034f);
+
+    w = sr.normal;
+    v = glm::normalize(glm::pow(w, tmp));
+    u = glm::pow(v, w);
+
+    atlas::math::Ray<atlas::math::Vector> shadowRay;
+    shadowRay.o = sr.ray.o + sr.t * sr.ray.d;
+    shadowRay.d = getDirection(sr);
+
+    if (inShadow(shadowRay, sr)) {
+        return (minAmount * mRadiance * mColour);
+    }
+    else {
+        return (mRadiance * mColour);
+    }
+}
+
+bool AmbientOccluder::castsShadows() {
+    return true;
+}
+
 int main()
 {
     using atlas::math::Ray;
@@ -771,7 +835,7 @@ int main()
 
     // Sun
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-50,-700 }, 225.0f));
-    world->scene[0]->setMaterial(std::make_shared<Phong>(0.2f, 0.5f, Colour{ 1,0.8,0.16 }, 0.2f, Colour{ 1,0.8,0.16 }, 3.0f));
+    world->scene[0]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0.8,0.16 }));
     world->scene[0]->setColour({ 1,0.8,0.16 });
 
     // Mercury
@@ -826,9 +890,11 @@ int main()
     world->scene[11]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));
     world->scene[11]->setColour({ 1,1,1 });
 
-    world->ambient = std::make_shared<Ambient>();
+    std::shared_ptr samplerPtr = std::make_shared<Jittered>(4, 83);
+    world->ambient = std::make_shared<AmbientOccluder>();
     world->ambient->setColour({ 1,1,1 });
-    world->ambient->scaleRadiance(0.5f);
+    world->ambient->scaleRadiance(1.0f);
+    world->ambient->setSampler(samplerPtr);
 
     world->lights.push_back(std::make_shared<Point>(Point{ { 0,-500,200 } }));
     world->lights[0]->setColour({ 1,1,1 });

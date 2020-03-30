@@ -161,6 +161,8 @@ public:
 
     virtual bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const = 0;
 
+    virtual void setSampler(std::shared_ptr<Sampler> sPtr) = 0;
+
 protected:
     Colour mColour;
     float mRadiance;
@@ -352,6 +354,8 @@ public:
 
     bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const override;
 
+    void setSampler(std::shared_ptr<Sampler> sPtr) override;
+
 private:
     atlas::math::Vector mDirection;
 };
@@ -371,6 +375,8 @@ public:
 
     bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const override;
 
+    void setSampler(std::shared_ptr<Sampler> sPtr) override;
+
 private:
     atlas::math::Vector mLoc;
 };
@@ -385,8 +391,30 @@ public:
 
     bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const override;
 
+    void setSampler(std::shared_ptr<Sampler> sPtr) override;
+
 private:
     atlas::math::Vector mDirection;
+};
+
+class AmbientOccluder : public Light {
+public:
+    AmbientOccluder();
+
+    void setSampler(std::shared_ptr<Sampler> sPtr) override;
+
+    atlas::math::Vector getDirection(ShadeRec& sr) override;
+
+    bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const override;
+
+    Colour L(ShadeRec& sr) override;
+
+    bool castsShadows() override;
+
+private:
+    atlas::math::Vector u, v, w;
+    std::shared_ptr<Sampler> mSPtr;
+    Colour minAmount{ 0.0f, 0.0f, 0.0f };
 };
 
 class Whitted {
