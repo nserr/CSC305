@@ -139,6 +139,34 @@ void Pinhole::renderScene(std::shared_ptr<World> world) const {
     }
 }
 
+// Whitted Functions
+
+Whitted::Whitted(ShadeRec& sr) : mSr{ sr }
+{}
+
+Colour Whitted::trace_ray(atlas::math::Ray<atlas::math::Vector> const& ray, const int depth) const {
+    bool hit = false;
+
+    if (depth > mSr.world->maxDepth) {
+        return Colour{ 0,0,0 };
+    }
+    else {
+        for (auto const& obj : mSr.world->scene) {
+            hit |= obj->hit(ray, mSr);
+        }
+
+        if (hit) {
+            mSr.depth = depth;
+            mSr.ray = ray;
+
+            return mSr.material->shade(mSr);
+        }
+        else {
+            return Colour{ 0,0,0 };
+        }
+    }
+}
+
 // Sampler Functions
 
 Sampler::Sampler(int numSamples, int numSets) :
@@ -230,6 +258,9 @@ bool Plane::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, float
     return false;
 }
 
+bool Plane::shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const {
+    return intersectRay(ray, tmin);
+}
 
 // Sphere Functions
 
@@ -279,6 +310,10 @@ bool Sphere::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, floa
     }
 
     return false;
+}
+
+bool Sphere::shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const {
+    return intersectRay(ray, tmin);
 }
 
 // Triangle Functions
@@ -340,6 +375,10 @@ bool Triangle::intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, fl
 
     tmin = t;
     return true;
+}
+
+bool Triangle::shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const {
+    return intersectRay(ray, tmin);
 }
 
 // Sampler Functions
@@ -449,6 +488,16 @@ void Lambertian::setDiffuseReflection(float kd) {
     mDiffuseReflection = kd;
 }
 
+Colour Lambertian::sampleF(ShadeRec const& sr,
+    atlas::math::Vector& wo,
+    atlas::math::Vector& wi) const {
+
+    float nDotWo = glm::dot(sr.normal, wo);
+    wi = -wo + 2.0f * sr.normal * nDotWo;
+
+    return (mDiffuseReflection * mDiffuseColour / (sr.normal * wi));
+}
+
 // Glossy Specular Functions
 
 GlossySpecular::GlossySpecular() : mKs{}, mCs{}, mExp{}
@@ -533,7 +582,18 @@ Colour Matte::shade(ShadeRec& sr) {
         float nDotWi = glm::dot(sr.normal, wi);
 
         if (nDotWi > 0.0f) {
-            L += mDiffuseBRDF->fn(sr, wo, wi) * sr.world->lights[i]->L(sr) * nDotWi;
+            bool inShadow = false;
+            if (sr.world->lights[i]->castsShadows()) {
+                Ray<Vector> shadowRay;
+                shadowRay.o = sr.ray.o + sr.t * sr.ray.d;
+                shadowRay.d = wi;
+
+                inShadow = sr.world->lights[i]->inShadow(shadowRay, sr);
+            }
+
+            if (!inShadow) {
+                L += mDiffuseBRDF->fn(sr, wo, wi) * sr.world->lights[i]->L(sr) * nDotWi;
+            }
         }
     }
 
@@ -592,7 +652,18 @@ Colour Phong::shade(ShadeRec& sr) {
         float nDotWi = glm::dot(sr.normal, wi);
 
         if (nDotWi > 0.0f) {
-            L += diffuse.fn(sr, wo, wi) + specular.fn(sr, wo, wi) * sr.world->lights[i]->L(sr) * nDotWi;
+            bool inShadow = false;
+            if (sr.world->lights[i]->castsShadows()) {
+                Ray<Vector> shadowRay;
+                shadowRay.o = sr.ray.o + sr.t * sr.ray.d;
+                shadowRay.d = wi;
+
+                inShadow = sr.world->lights[i]->inShadow(shadowRay, sr);
+            }
+
+            if (!inShadow) {
+                L += diffuse.fn(sr, wo, wi) + specular.fn(sr, wo, wi) * sr.world->lights[i]->L(sr) * nDotWi;
+            }
         }
     }
 
@@ -616,6 +687,15 @@ atlas::math::Vector Directional::getDirection([[maybe_unused]] ShadeRec& sr) {
     return mDirection;
 }
 
+bool Directional::castsShadows() {
+    return true;
+}
+
+bool Directional::inShadow([[maybe_unused]] atlas::math::Ray<atlas::math::Vector> const& ray,
+    [[maybe_unused]] ShadeRec const& sr) const {
+    return false;
+}
+
 // Point Functions
 
 Point::Point() : Light{}
@@ -629,9 +709,34 @@ void Point::setLocation(atlas::math::Vector const& loc) {
     mLoc = loc;
 }
 
+atlas::math::Point Point::getLocation() {
+    return mLoc;
+}
+
 atlas::math::Vector Point::getDirection([[maybe_unused]] ShadeRec& sr) {
     auto tmp = sr.ray.o + (sr.t * sr.ray.d);
     return glm::normalize(mLoc - tmp);
+}
+
+bool Point::castsShadows() {
+    return true;
+}
+
+bool Point::inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const {
+    float t;
+    int numObjects = static_cast<int>(sr.world->scene.size());
+    float dX = mLoc.x - ray.o.x;
+    float dY = mLoc.y - ray.o.y;
+    float dZ = mLoc.z - ray.o.z;
+    float d = sqrt((dX * dX) + (dY * dY) + (dZ * dZ));
+
+    for (int i{ 0 }; i < numObjects; i++) {
+        if (sr.world->scene[i]->shadowHit(ray, t) && t < d) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // Ambient Functions
@@ -641,6 +746,15 @@ Ambient::Ambient() : Light{}
 
 atlas::math::Vector Ambient::getDirection([[maybe_unused]] ShadeRec& sr) {
     return atlas::math::Vector{ 0.0f };
+}
+
+bool Ambient::castsShadows() {
+    return false;
+}
+
+bool Ambient::inShadow([[maybe_unused]] atlas::math::Ray<atlas::math::Vector> const& ray,
+    [[maybe_unused]] ShadeRec const& sr) const {
+    return false;
 }
 
 int main()
@@ -653,6 +767,7 @@ int main()
     world->height = 600;
     world->background = { 0,0,0 };
     world->sampler = std::make_shared<Jittered>(4, 83);
+    world->maxDepth = 3;
 
     // Sun
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-50,-700 }, 225.0f));
@@ -700,12 +815,12 @@ int main()
     world->scene[8]->setColour({ 0.27,0.45,1 });
 
     world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ -300,-250,-400 }, atlas::math::Point{ -350,-350,-400 }, atlas::math::Point{ -250,-350,-400 }));
-    world->scene[9]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));
+    world->scene[9]->setMaterial(std::make_shared<Phong>(0.2f, 0.5f, Colour{ 1,1,1 }, 0.2f, Colour{ 1,1,1 }, 3.0f));
     world->scene[9]->setColour({ 1,1,1 });
 
-    world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ 300,250,-400 }, atlas::math::Point{ 350,350,-400 }, atlas::math::Point{ 250,350,-400 }));
-    world->scene[10]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0,0,0 }));
-    world->scene[10]->setColour({ 0,0,0 });
+    world->scene.push_back(std::make_shared<Triangle>(atlas::math::Point{ 300,-250,-400 }, atlas::math::Point{ 250,-350,-400 }, atlas::math::Point{ 350,-350,-400 }));
+    world->scene[10]->setMaterial(std::make_shared<Phong>(0.2f, 0.5f, Colour{ 1,1,1 }, 0.2f, Colour{ 1,1,1 }, 3.0f));
+    world->scene[10]->setColour({ 1,1,1 });
 
     world->scene.push_back(std::make_shared<Plane>(atlas::math::Point{ 0,300,-900 }, Vector{ 0,-1,0 }));
     world->scene[11]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));

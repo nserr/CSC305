@@ -44,6 +44,7 @@ struct World {
     std::vector<Colour> image;
     std::vector<std::shared_ptr<Light>> lights;
     std::shared_ptr<Light> ambient;
+    int maxDepth;
 };
 
 struct ShadeRec {
@@ -118,6 +119,8 @@ public:
 
     std::shared_ptr<Material> getMaterial() const;
 
+    virtual bool shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const = 0;
+
 protected:
     virtual bool intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const = 0;
 
@@ -154,6 +157,10 @@ public:
 
     void setColour(Colour const& c);
 
+    virtual bool castsShadows() = 0;
+
+    virtual bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const = 0;
+
 protected:
     Colour mColour;
     float mRadiance;
@@ -164,6 +171,8 @@ public:
     Plane(atlas::math::Point p, atlas::math::Normal norm);
 
     bool hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& sr) const;
+
+    bool shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const;
 
 private:
     bool intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const;
@@ -178,6 +187,8 @@ public:
 
     bool hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& sr) const;
 
+    bool shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const;
+
 private:
     bool intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const;
 
@@ -191,6 +202,8 @@ public:
     Triangle(atlas::math::Point p1, atlas::math::Point p2, atlas::math::Point p3);
 
     bool hit(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec& sr) const;
+
+    bool shadowHit(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const;
 
 private:
     bool intersectRay(atlas::math::Ray<atlas::math::Vector> const& ray, float& tmin) const;
@@ -251,6 +264,8 @@ public:
     void setDiffuseReflection(float kd);
 
     void setDiffuseColour(Colour const& colour);
+
+    Colour sampleF(ShadeRec const& sr, atlas::math::Vector& wo, atlas::math::Vector& wi) const;
 
 private:
     Colour mDiffuseColour;
@@ -332,6 +347,10 @@ public:
     void setDirection(atlas::math::Vector const& d);
 
     atlas::math::Vector getDirection(ShadeRec& sr) override;
+    
+    bool castsShadows() override;
+
+    bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const override;
 
 private:
     atlas::math::Vector mDirection;
@@ -344,7 +363,13 @@ public:
 
     void setLocation(atlas::math::Point const& loc);
 
+    atlas::math::Point getLocation();
+
     atlas::math::Vector getDirection(ShadeRec& sr) override;
+
+    bool castsShadows() override;
+
+    bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const override;
 
 private:
     atlas::math::Vector mLoc;
@@ -356,6 +381,19 @@ public:
 
     atlas::math::Vector getDirection(ShadeRec& sr) override;
 
+    bool castsShadows() override;
+
+    bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const override;
+
 private:
     atlas::math::Vector mDirection;
+};
+
+class Whitted {
+    Whitted(ShadeRec& sr);
+
+    Colour trace_ray(atlas::math::Ray<atlas::math::Vector> const& ray, const int depth) const;
+
+private:
+    ShadeRec& mSr;
 };
