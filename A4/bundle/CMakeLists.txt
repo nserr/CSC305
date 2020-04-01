@@ -17,6 +17,10 @@ set(ASSIGNMENT_SOURCE
     "${ASSIGNMENT_ROOT}/main.cpp"
     )
 
+set(PATH_INCLUDE "${ASSIGNMENT_ROOT}/paths.hpp")
+configure_file("${ASSIGNMENT_ROOT}/paths.hpp.in" ${PATH_INCLUDE})
+list(APPEND ASSIGNMENT_INCLUDE ${PATH_INCLUDE})
+
 source_group("include" FILES ${ASSIGNMENT_INCLUDE})
 source_group("source" FILES ${ASSIGNMENT_SOURCE})
 

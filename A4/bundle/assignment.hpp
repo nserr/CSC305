@@ -35,6 +35,7 @@ class Material;
 class Light;
 class Shape;
 class Sampler;
+class Whitted;
 
 struct World {
     std::size_t width, height;
@@ -44,6 +45,7 @@ struct World {
     std::vector<Colour> image;
     std::vector<std::shared_ptr<Light>> lights;
     std::shared_ptr<Light> ambient;
+    std::shared_ptr<Whitted> whitted;
     int maxDepth;
 };
 
@@ -90,6 +92,8 @@ public:
     virtual void generateSamples() = 0;
 
     atlas::math::Point sampleUnitSquare();
+
+    atlas::math::Point sampleHemisphere();
 
     void mapSamplesToHemisphere(const float e);
 
@@ -341,6 +345,16 @@ private:
     GlossySpecular specular;
 };
 
+class Reflective : public Phong {
+public:
+    Reflective();
+
+    Colour shade(ShadeRec& sr);
+
+private:
+    std::shared_ptr<Lambertian> mBRDF;
+};
+
 class Directional : public Light {
 public:
     Directional();
@@ -418,9 +432,10 @@ private:
 };
 
 class Whitted {
+public:
     Whitted(ShadeRec& sr);
 
-    Colour trace_ray(atlas::math::Ray<atlas::math::Vector> const& ray, const int depth) const;
+    Colour traceRay(atlas::math::Ray<atlas::math::Vector> const& ray, const int depth) const;
 
 private:
     ShadeRec& mSr;
