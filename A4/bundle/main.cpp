@@ -108,7 +108,6 @@ void Pinhole::renderScene(std::shared_ptr<World> world) const {
             for (int j{ 0 }; j < world->sampler->getNumSamples(); j++) {
                 ShadeRec trace_data{};
                 trace_data.world = world;
-                trace_data.world->whitted = std::make_shared<Whitted>(trace_data);
                 trace_data.t = std::numeric_limits<float>::max();
                 samplePoint = world->sampler->sampleUnitSquare();
                 pixelPoint.x = c - 0.5f * world->width + samplePoint.x;
@@ -121,6 +120,7 @@ void Pinhole::renderScene(std::shared_ptr<World> world) const {
                 }
 
                 if (hit) {
+                    trace_data.world->whitted = std::make_shared<Whitted>(trace_data);
                     // Out-of-Gamut handling (max-to-one)
                     Colour tmp = trace_data.material->shade(trace_data);
                     float max = std::max(std::max(tmp.r, tmp.g), tmp.b);
@@ -495,14 +495,36 @@ void Lambertian::setDiffuseReflection(float kd) {
     mDiffuseReflection = kd;
 }
 
-Colour Lambertian::sampleF(ShadeRec const& sr,
-    atlas::math::Vector& wo,
-    atlas::math::Vector& wi) const {
+// Perfect Specular Functions
 
+PerfectSpecular::PerfectSpecular(float kr, Colour cr) : BRDF(), mKr{kr}, mCr{cr}
+{}
+
+void PerfectSpecular::setKr(float kr) {
+    mKr = kr;
+}
+
+void PerfectSpecular::setCr(Colour cr) {
+    mCr = cr;
+}
+
+Colour PerfectSpecular::fn([[maybe_unused]] ShadeRec const& sr,
+    [[maybe_unused]] atlas::math::Vector const& reflected,
+    [[maybe_unused]] atlas::math::Vector const& incoming) const {
+
+    return Colour(0, 0, 0);
+}
+
+Colour PerfectSpecular::rho([[maybe_unused]] ShadeRec const& sr,
+    [[maybe_unused]] atlas::math::Vector const& reflected) const {
+
+    return Colour(0, 0, 0);
+}
+
+Colour PerfectSpecular::sampleF(ShadeRec& sr, atlas::math::Vector& wo, atlas::math::Vector& wi) const {
     float nDotWo = glm::dot(sr.normal, wo);
     wi = -wo + 2.0f * sr.normal * nDotWo;
-
-    return (mDiffuseReflection * mDiffuseColour / sr.normal * wi);
+    return (mKr * mCr / glm::dot(sr.normal, wi));
 }
 
 // Glossy Specular Functions
@@ -679,7 +701,8 @@ Colour Phong::shade(ShadeRec& sr) {
 
 // Reflective Functions
 
-Reflective::Reflective() : Phong{}, mBRDF{ std::make_shared<Lambertian>() }
+Reflective::Reflective(std::shared_ptr<Phong> phong, std::shared_ptr<PerfectSpecular> BRDF) : 
+    Phong{}, mPhong{ phong }, mBRDF{ BRDF }
 {}
 
 Colour Reflective::shade(ShadeRec& sr) {
@@ -693,7 +716,7 @@ Colour Reflective::shade(ShadeRec& sr) {
     reflectedRay.o = sr.ray.o + sr.t * sr.ray.d;
     reflectedRay.d = wi;
 
-    L += fr * sr.world->whitted->traceRay(reflectedRay, sr.depth + 1) * (sr.normal * wi);
+    L += fr * sr.world->whitted->traceRay(reflectedRay, sr.depth + 1) * glm::dot(sr.normal, wi);
     return L;
 }
 
@@ -862,7 +885,10 @@ int main()
 
     // Sun
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-50,-700 }, 225.0f));
-    world->scene[0]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,0.8,0.16 }));
+    std::shared_ptr phongPtr = std::make_shared<Phong>(0.25f, 0.5f, Colour{ 1,0.8,0.16 }, 0.75f, Colour{ 1,1,1 }, 100.0f);
+    std::shared_ptr brdfPtr = std::make_shared<PerfectSpecular>(0.75f, Colour{ 1,1,1 });
+    std::shared_ptr sunPtr = std::make_shared<Reflective>(phongPtr, brdfPtr);
+    world->scene[0]->setMaterial(sunPtr);
     world->scene[0]->setColour({ 1,0.8,0.16 });
 
     // Mercury

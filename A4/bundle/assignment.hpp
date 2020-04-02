@@ -271,11 +271,31 @@ public:
 
     void setDiffuseColour(Colour const& colour);
 
-    Colour sampleF(ShadeRec const& sr, atlas::math::Vector& wo, atlas::math::Vector& wi) const;
-
 private:
     Colour mDiffuseColour;
     float mDiffuseReflection;
+};
+
+class PerfectSpecular : public BRDF {
+public:
+    PerfectSpecular(float kr, Colour cr);
+
+    Colour fn(ShadeRec const& sr,
+        atlas::math::Vector const& reflected,
+        atlas::math::Vector const& incoming) const override;
+
+    Colour rho(ShadeRec const& sr,
+        atlas::math::Vector const& reflected) const override;
+
+    void setKr(float kr);
+
+    void setCr(Colour cr);
+
+    Colour sampleF(ShadeRec& sr, atlas::math::Vector& wo, atlas::math::Vector& wi) const;
+
+private:
+    float mKr;
+    Colour mCr;
 };
 
 class GlossySpecular : public BRDF {
@@ -347,12 +367,13 @@ private:
 
 class Reflective : public Phong {
 public:
-    Reflective();
+    Reflective(std::shared_ptr<Phong> phong, std::shared_ptr<PerfectSpecular> BRDF);
 
     Colour shade(ShadeRec& sr);
 
 private:
-    std::shared_ptr<Lambertian> mBRDF;
+    std::shared_ptr<PerfectSpecular> mBRDF;
+    std::shared_ptr<Phong> mPhong;
 };
 
 class Directional : public Light {
