@@ -121,15 +121,7 @@ void Pinhole::renderScene(std::shared_ptr<World> world) const {
 
                 if (hit) {
                     trace_data.world->whitted = std::make_shared<Whitted>(trace_data);
-                    // Out-of-Gamut handling (max-to-one)
-                    Colour tmp = trace_data.material->shade(trace_data);
-                    float max = std::max(std::max(tmp.r, tmp.g), tmp.b);
-
-                    if (max > 1.0) {
-                        tmp /= max;
-                    }
-
-                    pixelAverage += tmp;
+                    pixelAverage += trace_data.material->shade(trace_data);
                 }
             }
 
@@ -871,6 +863,18 @@ bool AmbientOccluder::castsShadows() {
     return true;
 }
 
+// Out-of-Gamut Check (max-to-one)
+void gamutCheck(std::vector<Colour> image) {
+    for (int i{ 0 }; i < image.size(); i++) {
+        float max = std::max(std::max(image[i].r, image[i].g), image[i].b);
+        if (max > 1.0f) {
+            image[i].r /= max;
+            image[i].g /= max;
+            image[i].b /= max;
+        }
+    }
+}
+
 int main()
 {
     using atlas::math::Ray;
@@ -960,6 +964,7 @@ int main()
     camera.setEye({ 0.0f, 0.0f, 300.0f });
     camera.computeUVW();
     camera.renderScene(world);
+    gamutCheck(world->image);
 
     saveToBMP("C:/Users/noahs/OneDrive/Desktop/School/CSC 305/Assignments/A4/bundle/render.bmp", world->width, world->height, world->image);
 
