@@ -211,12 +211,11 @@ atlas::math::Point Sampler::sampleHemisphere() {
 }
 
 void Sampler::mapSamplesToHemisphere(const float e) {
-    size_t samplesSize = mSamples.size();
-    int size = static_cast<int>(samplesSize);
+    size_t size = mSamples.size();
 
     hemisphereSamples.reserve(mNumSamples * mNumSets);
 
-    for (int i{ 0 }; i < size; i++) {
+    for (size_t i{ 0 }; i < size; i++) {
         float cosPhi = cos(2.0f * glm::pi<float>() * mSamples[i].x);
         float sinPhi = sin(2.0f * glm::pi<float>() * mSamples[i].x);
 
@@ -457,6 +456,55 @@ void Jittered::generateSamples() {
     }
 }
 
+// MultiJittered Sample Functions
+
+MultiJittered::MultiJittered(int numSamples, int numSets) : Sampler{ numSamples, numSets } {
+    generateSamples();
+}
+
+void MultiJittered::generateSamples() {
+    int n = static_cast<int>(glm::sqrt(static_cast<float>(mNumSamples)));
+    float subcellWidth = 1.0f / static_cast<float>(mNumSamples);
+    atlas::math::Random<float> engineF;
+    atlas::math::Random<int> engineI;
+
+    atlas::math::Point fillPoint;
+    for (int i{ 0 }; i < mNumSamples * mNumSets; i++) {
+        mSamples.push_back(fillPoint);
+    }
+
+    for (int i{ 0 }; i < mNumSets; i++) {
+        for (int j{ 0 }; j < n; j++) {
+            for (int k{ 0 }; k < n; k++) {
+                mSamples[j * n + k + i * mNumSamples].x = (j * n + k) * subcellWidth + engineF.getRandomRange(0, subcellWidth);
+                mSamples[j * n + k + i * mNumSamples].y = (k * n + j) * subcellWidth + engineF.getRandomRange(0, subcellWidth);
+            }
+        }
+    }
+
+    for (int i{ 0 }; i < mNumSets; i++) {
+        for (int j{ 0 }; j < n; j++) {
+            for (int k{ 0 }; k < n; k++) {
+                int l = engineI.getRandomRange(k, n - 1);
+                float t = mSamples[j * n + k + i * mNumSamples].x;
+                mSamples[j * n + k + i * mNumSamples].x = mSamples[j * n + l + i * mNumSamples].x;
+                mSamples[j * n + l + i * mNumSamples].x = t;
+            }
+        }
+    }
+
+    for (int i{ 0 }; i < mNumSets; i++) {
+        for (int j{ 0 }; j < n; j++) {
+            for (int k{ 0 }; k < n; k++) {
+                int l = engineI.getRandomRange(k, n - 1);
+                float t = mSamples[k * n + j + i * mNumSamples].y;
+                mSamples[k * n + j + i + mNumSamples].y = mSamples[l * n + j + i * mNumSamples].y;
+                mSamples[l * n + j + i * mNumSamples].y = t;
+            }
+        }
+    }
+}
+
 // Lambertian Functions
 
 Lambertian::Lambertian() : mDiffuseColour{}, mDiffuseReflection{}
@@ -527,22 +575,21 @@ GlossySpecular::GlossySpecular() : mKs{}, mCs{}, mExp{}
 GlossySpecular::GlossySpecular(float ks, Colour cs, float exp) : mKs{ks}, mCs{cs}, mExp{exp}
 {}
 
-Colour GlossySpecular::fn([[maybe_unused]] ShadeRec const& sr,
-    [[maybe_unused]] atlas::math::Vector const& reflected,
-    [[maybe_unused]] atlas::math::Vector const& incoming) const {
+Colour GlossySpecular::fn(ShadeRec const& sr,
+    atlas::math::Vector const& wo,
+    atlas::math::Vector const& wi) const {
 
-    const float epsilon = 0.0001f;
-    float nWi{ glm::dot(sr.normal, incoming) };
-    
-    atlas::math::Vector r{ 2.0f * sr.normal * nWi - incoming };
-    float rWo{ glm::dot(r, reflected) };
+    Colour L{ 0,0,0 };
 
-    if (rWo > epsilon) {
-        return mCs * mKs * glm::pow<float, float>(rWo, mExp);
+    float nDotWi = glm::dot(sr.normal, wi);
+    atlas::math::Vector r(-wi + 2.0f * sr.normal * nDotWi);
+    float rDotWo = glm::dot(r, wo);
+
+    if (rDotWo > 0.0f) {
+        L = mKs * mCs * glm::pow(rDotWo, mExp);
     }
-    else {
-        return Colour{ 0,0,0 };
-    }
+
+    return L;
 }
 
 Colour GlossySpecular::rho([[maybe_unused]] ShadeRec const& sr,
@@ -561,6 +608,40 @@ void GlossySpecular::setSpecularColour(Colour cs) {
 
 void GlossySpecular::setExp(float exp) {
     mExp = exp;
+}
+
+void GlossySpecular::setSamples(const int numSamples, const int numSets, const float exp) {
+    sPtr = std::make_shared<MultiJittered>(numSamples, numSets);
+    sPtr->mapSamplesToHemisphere(exp);
+}
+
+Colour GlossySpecular::sampleF(ShadeRec& sr,
+    atlas::math::Vector& wo,
+    atlas::math::Vector& wi,
+    float& pdf) const {
+
+    using atlas::math::Vector;
+
+    float nDotWo = glm::dot(sr.normal, wo);
+    Vector r = -wo + 2.0f * sr.normal * nDotWo;
+
+    Vector w = r;
+    Vector u = glm::cross(Vector(0.00424f, 1.0f, 0.00764f), w);
+    glm::normalize(u);
+    Vector v = glm::cross(u, w);
+
+    atlas::math::Point sp = sPtr->sampleHemisphere();
+    wi = sp.x * u + sp.y * v + sp.z * w;
+
+    if (glm::dot(sr.normal, wi) < 0.0f) {
+        wi = -sp.x * u - sp.y * v + sp.z * w;
+    }
+
+    float rDotWi = glm::dot(r, wi);
+    float phongLobe = glm::pow(rDotWi, mExp);
+    pdf = phongLobe * glm::dot(sr.normal, wi);
+
+    return (mKs * mCs * phongLobe);
 }
 
 // Matte Functions
@@ -627,8 +708,8 @@ Phong::Phong() : Material{}, diffuse{Lambertian()}, ambient{Lambertian()}, specu
 {}
 
 Phong::Phong(float ka, float kd, Colour c, float ks, Colour cs, float exp) : Phong{} {
-    setDiffuseReflection(kd);
     setAmbientReflection(ka);
+    setDiffuseReflection(kd);
     setDiffuseColour(c);
     setSpecularReflection(ks);
     setSpecularColour(cs);
@@ -688,6 +769,32 @@ Colour Phong::shade(ShadeRec& sr) {
         }
     }
 
+    return L;
+}
+
+// Glossy Reflector Functions
+
+GlossyReflector::GlossyReflector(std::shared_ptr<Phong> phong, std::shared_ptr<GlossySpecular> BRDF) : 
+    Phong{}, mPhong { phong }, mBRDF{ BRDF }
+{}
+
+void GlossyReflector::setSamples(const int numSamples, const int numSets, const float exp) {
+    mBRDF->setSamples(numSamples, numSets, exp);
+}
+
+Colour GlossyReflector::shade(ShadeRec& sr) {
+    Colour L = Phong::shade(sr);
+
+    atlas::math::Vector wo = -sr.ray.d;
+    atlas::math::Vector wi;
+    float pdf;
+
+    Colour fr(mBRDF->sampleF(sr, wo, wi, pdf));
+    atlas::math::Ray<atlas::math::Vector> reflectedRay;
+    reflectedRay.o = sr.ray.o + sr.t * sr.ray.d;
+    reflectedRay.d = wi;
+
+    L += fr * sr.world->whitted->traceRay(reflectedRay, sr.depth + 1) * glm::dot(sr.normal, wi) / pdf;
     return L;
 }
 
@@ -819,20 +926,20 @@ void AmbientOccluder::setSampler(std::shared_ptr<Sampler> sPtr) {
     }
 
     mSPtr = sPtr;
-    mSPtr->mapSamplesToHemisphere(1);
+    mSPtr->mapSamplesToHemisphere(1.0f);
 }
 
 atlas::math::Vector AmbientOccluder::getDirection([[maybe_unused]] ShadeRec& sr) {
-    atlas::math::Point sp = mSPtr->sampleUnitSquare();
+    atlas::math::Point sp = mSPtr->sampleHemisphere();
     return (sp.x * u + sp.y * v + sp.z * w);
 }
 
 bool AmbientOccluder::inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const {
     float t;
-    int numObjects = static_cast<int>(sr.world->scene.size());
+    size_t numObjects = sr.world->scene.size();
 
-    for (int i{ 0 }; i < numObjects; i++) {
-        if (sr.world->scene[i]->shadowHit(ray, t)) {
+    for (size_t i{ 0 }; i < numObjects; i++) {
+        if (sr.world->scene[i]->shadowHit(ray, t) && t) {
             return true;
         }
     }
@@ -844,12 +951,14 @@ Colour AmbientOccluder::L(ShadeRec& sr) {
     atlas::math::Vector tmp(0.00001f, 1.0f, 0.00001f);
 
     w = sr.normal;
-    v = glm::normalize(glm::pow(w, tmp));
-    u = glm::pow(v, w);
+    v = glm::cross(w, tmp);
+    glm::normalize(v);
+    u = glm::cross(v, w);
 
     atlas::math::Ray<atlas::math::Vector> shadowRay;
     shadowRay.o = sr.ray.o + sr.t * sr.ray.d;
-    shadowRay.d = glm::normalize(getDirection(sr));
+    shadowRay.d = getDirection(sr);
+    glm::normalize(shadowRay.d);
 
     if (inShadow(shadowRay, sr)) {
         return (minAmount * mRadiance * mColour);
@@ -884,7 +993,7 @@ int main()
     world->width = 600;
     world->height = 600;
     world->background = { 0,0,0 };
-    world->sampler = std::make_shared<Jittered>(4, 83);
+    world->sampler = std::make_shared<MultiJittered>(4, 83);
     world->maxDepth = 10;
 
     // Sun
@@ -917,7 +1026,11 @@ int main()
 
     // Jupiter
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 375,32,-600 }, 110.0f));
-    world->scene[5]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.81,0.78,0.69 }));
+    std::shared_ptr phongPtr2 = std::make_shared<Phong>(0.0f, 0.0f, Colour{ 0.81,0.78,0.69 }, 0.0f, Colour{ 0.81,0.78,0.69 }, 100.0f);
+    std::shared_ptr brdfPtr2 = std::make_shared<GlossySpecular>(0.9f, Colour{ 0.81,0.78,0.69 }, 100.0f);
+    std::shared_ptr jupiterPtr = std::make_shared<GlossyReflector>(phongPtr2, brdfPtr2);
+    jupiterPtr->setSamples(100, 83, 1000.0f);
+    world->scene[5]->setMaterial(jupiterPtr);
     world->scene[5]->setColour({ 0.81,0.78,0.69 });
 
     // Saturn
@@ -950,11 +1063,11 @@ int main()
     world->scene[11]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 1,1,1 }));
     world->scene[11]->setColour({ 1,1,1 });
 
-    std::shared_ptr samplerPtr = std::make_shared<Jittered>(4, 83);
+    std::shared_ptr samplerPtr = std::make_shared<MultiJittered>(4, 83);
     world->ambient = std::make_shared<AmbientOccluder>();
-    world->ambient->setColour({ 1,1,1 });
-    world->ambient->scaleRadiance(1.0f);
     world->ambient->setSampler(samplerPtr);
+    world->ambient->setColour({ 1,1,1 });
+    world->ambient->scaleRadiance(0.75f);
 
     world->lights.push_back(std::make_shared<Point>(Point{ { 0,-500,200 } }));
     world->lights[0]->setColour({ 1,1,1 });

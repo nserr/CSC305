@@ -255,6 +255,13 @@ public:
     void generateSamples();
 };
 
+class MultiJittered : public Sampler {
+public:
+    MultiJittered(int numSamples, int numSets);
+
+    void generateSamples();
+};
+
 class Lambertian : public BRDF {
 public:
     Lambertian();
@@ -316,10 +323,15 @@ public:
 
     void setExp(float exp);
 
+    void setSamples(const int numSamples, const int numSets, const float exp);
+
+    Colour sampleF(ShadeRec& sr, atlas::math::Vector& wo, atlas::math::Vector& wi, float& pdf) const;
+
 private:
     float mKs;
     Colour mCs;
     float mExp;
+    std::shared_ptr<MultiJittered> sPtr;
 };
 
 class Matte : public Material {
@@ -345,9 +357,9 @@ public:
     Phong();
     Phong(float ka, float kd, Colour c, float ks, Colour cs, float exp);
 
-    void setDiffuseReflection(float dr);
-
     void setAmbientReflection(float ar);
+    
+    void setDiffuseReflection(float dr);
 
     void setDiffuseColour(Colour c);
 
@@ -363,6 +375,19 @@ private:
     Lambertian ambient;
     Lambertian diffuse;
     GlossySpecular specular;
+};
+
+class GlossyReflector : public Phong {
+public:
+    GlossyReflector(std::shared_ptr<Phong>, std::shared_ptr<GlossySpecular> BRDF);
+
+    void setSamples(const int numSamples, const int numSets, const float exp);
+
+    Colour shade(ShadeRec& sr);
+
+private:
+    std::shared_ptr<Phong> mPhong;
+    std::shared_ptr<GlossySpecular> mBRDF;
 };
 
 class Reflective : public Phong {
