@@ -144,6 +144,23 @@ public:
         atlas::math::Vector const& reflected) const = 0;
 };
 
+class BTDF {
+public:
+    virtual ~BTDF() = default;
+
+    virtual Colour f([[maybe_unused]] ShadeRec& sr, [[maybe_unused]] atlas::math::Vector& wo, [[maybe_unused]] atlas::math::Vector& wi) const {
+        return Colour(0, 0, 0);
+    }
+
+    virtual Colour sampleF([[maybe_unused]] ShadeRec& sr, [[maybe_unused]] atlas::math::Vector& wo, [[maybe_unused]] atlas::math::Vector& wt) const {
+        return Colour(0, 0, 0);
+    }
+
+    virtual Colour rho([[maybe_unused]] ShadeRec& sr, [[maybe_unused]] atlas::math::Vector& wo) const {
+        return Colour(0, 0, 0);
+    }
+};
+
 class Material {
 public:
     virtual ~Material() = default;
@@ -334,6 +351,28 @@ private:
     std::shared_ptr<MultiJittered> sPtr;
 };
 
+class PerfectTransmitter : public BTDF {
+public:
+    PerfectTransmitter();
+    PerfectTransmitter(const float k, const float eta);
+
+    void setKt(const float k);
+
+    void setIor(const float eta);
+
+    bool tir(ShadeRec& sr) const;
+
+    Colour f(ShadeRec& sr, atlas::math::Vector& wo, atlas::math::Vector& wi) const override;
+
+    Colour sampleF(ShadeRec& sr, atlas::math::Vector& wo, atlas::math::Vector& wt) const override;
+
+    Colour rho(ShadeRec& sr, atlas::math::Vector& wo) const override;
+
+private:
+    float mKt;
+    float mIor;
+};
+
 class Matte : public Material {
 public:
     Matte();
@@ -358,7 +397,7 @@ public:
     Phong(float ka, float kd, Colour c, float ks, Colour cs, float exp);
 
     void setAmbientReflection(float ar);
-    
+
     void setDiffuseReflection(float dr);
 
     void setDiffuseColour(Colour c);
@@ -401,6 +440,18 @@ private:
     std::shared_ptr<Phong> mPhong;
 };
 
+class Transparent : public Phong {
+public:
+    Transparent(std::shared_ptr<Phong> phong, std::shared_ptr<PerfectSpecular> BRDF, std::shared_ptr<PerfectTransmitter> BTDF);
+
+    Colour shade(ShadeRec& sr);
+
+private:
+    std::shared_ptr<Phong> mPhong;
+    std::shared_ptr<PerfectSpecular> mBRDF;
+    std::shared_ptr<PerfectTransmitter> mBTDF;
+};
+
 class Directional : public Light {
 public:
     Directional();
@@ -409,7 +460,7 @@ public:
     void setDirection(atlas::math::Vector const& d);
 
     atlas::math::Vector getDirection(ShadeRec& sr) override;
-    
+
     bool castsShadows() override;
 
     bool inShadow(atlas::math::Ray<atlas::math::Vector> const& ray, ShadeRec const& sr) const override;
