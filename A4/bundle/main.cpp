@@ -139,7 +139,7 @@ Whitted::Whitted(ShadeRec& sr) : mSr{ sr }
 
 Colour Whitted::traceRay(atlas::math::Ray<atlas::math::Vector> const& ray, const int depth) const {
     if (depth > mSr.world->maxDepth) {
-        return Colour{ 0,0,0 };
+        return mSr.world->background;
     }
     else {
         bool hit = false;
@@ -661,7 +661,7 @@ void PerfectTransmitter::setIor(const float ior) {
 }
 
 bool PerfectTransmitter::tir(ShadeRec& sr) const {
-    atlas::math::Vector wo = -sr.ray.d;
+    atlas::math::Vector wo(-sr.ray.d);
     float cosThetaI = glm::dot(sr.normal, wo);
     float eta = mIor;
 
@@ -669,7 +669,7 @@ bool PerfectTransmitter::tir(ShadeRec& sr) const {
         eta = 1.0f / eta;
     }
 
-    return (1.0f - (1.0f - cosThetaI * cosThetaI) / (eta * eta) < 0.0f);
+    return ((1.0f - (1.0f - cosThetaI * cosThetaI) / (eta * eta)) < 0.0f);
 }
 
 Colour PerfectTransmitter::f([[maybe_unused]] ShadeRec& sr,
@@ -683,7 +683,7 @@ Colour PerfectTransmitter::sampleF(ShadeRec& sr,
     atlas::math::Vector& wo,
     atlas::math::Vector& wt) const {
 
-    atlas::math::Normal n = sr.normal;
+    atlas::math::Normal n(sr.normal);
     float cosThetaI = glm::dot(n, wo);
     float eta = mIor;
 
@@ -905,7 +905,7 @@ Colour Transparent::shade(ShadeRec& sr) {
         transmittedRay.o = sr.ray.o + sr.t * sr.ray.d;
         transmittedRay.d = wt;
 
-        L += fr * sr.world->whitted->traceRay(reflectedRay, sr.depth + 1) * fabs(glm::dot(sr.normal, wi));
+        //L += fr * sr.world->whitted->traceRay(reflectedRay, sr.depth + 1) * fabs(glm::dot(sr.normal, wi));
         L += ft * sr.world->whitted->traceRay(transmittedRay, sr.depth + 1) * fabs(glm::dot(sr.normal, wt));
     }
 
@@ -1087,15 +1087,16 @@ int main()
     world->height = 600;
     world->background = { 0,0,0 };
     world->sampler = std::make_shared<MultiJittered>(4, 83);
-    world->maxDepth = 1;
+    world->maxDepth = 10;
 
     // Sun
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-50,-700 }, 225.0f));
-    std::shared_ptr sunPhongPtr = std::make_shared<Phong>(0.25f, 0.5f, Colour{ 1,0.8,0.16 }, 0.75f, Colour{ 1,1,1 }, 100.0f);
-    std::shared_ptr sunBrdfPtr = std::make_shared<PerfectSpecular>(0.75f, Colour{ 1,1,1 });
-    std::shared_ptr sunPtr = std::make_shared<Reflective>(sunPhongPtr, sunBrdfPtr);
+    std::shared_ptr sunPhongPtr = std::make_shared<Phong>(0.0f, 0.0f, Colour{ 1,1,1 }, 0.5f, Colour{ 1,1,1 }, 2000.0f);
+    std::shared_ptr sunBrdfPtr = std::make_shared<PerfectSpecular>(1.0f, Colour{ 1,1,1 });
+    std::shared_ptr sunBtdfPtr = std::make_shared<PerfectTransmitter>(0.9f, 1.0f);
+    std::shared_ptr sunPtr = std::make_shared<Transparent>(sunPhongPtr, sunBrdfPtr, sunBtdfPtr);
     world->scene[0]->setMaterial(sunPtr);
-    world->scene[0]->setColour({ 1,0.8,0.16 });
+    world->scene[0]->setColour({ 1,1,1 });
 
     // Mercury
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ -450,-75,-800 }, 50.0f));
@@ -1108,7 +1109,7 @@ int main()
     world->scene[2]->setColour({ 0.76,0.57,0.22 });
 
     // Earth
-    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-300,-800 }, 70.0f));
+    world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 0,-325,-800 }, 70.0f));
     world->scene[3]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.12,0.25,0.83 }));
     world->scene[3]->setColour({ 0.12,0.25,0.83 });
 
@@ -1124,13 +1125,11 @@ int main()
 
     // Saturn
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ 125,175,-500 }, 95.0f));
-    std::shared_ptr saturnPhongPtr = std::make_shared<Phong>(0.0f, 0.0f, Colour{ 1,1,1 }, 0.5f, Colour{ 1,1,1 }, 2000.0f);
-    std::shared_ptr saturnBrdfPtr = std::make_shared<PerfectSpecular>(0.1f, Colour{ 1,1,1 });
-    std::shared_ptr saturnBtdfPtr = std::make_shared<PerfectTransmitter>(0.9f, 1.5f);
-    std::shared_ptr saturnPtr = std::make_shared<Transparent>(saturnPhongPtr, saturnBrdfPtr, saturnBtdfPtr);
+    std::shared_ptr saturnPhongPtr = std::make_shared<Phong>(0.25f, 0.5f, Colour{ 0.79,0.68,0.46 }, 0.75f, Colour{ 1,1,1 }, 100.0f);
+    std::shared_ptr saturnBrdfPtr = std::make_shared<PerfectSpecular>(0.75f, Colour{ 1,1,1 });
+    std::shared_ptr saturnPtr = std::make_shared<Reflective>(saturnPhongPtr, saturnBrdfPtr);
     world->scene[6]->setMaterial(saturnPtr);
-    //world->scene[6]->setMaterial(std::make_shared<Matte>(0.5f, 0.05f, Colour{ 0.79,0.68,0.46 }));
-    world->scene[6]->setColour({ 1,1,1 });
+    world->scene[6]->setColour({ 0.79,0.68,0.46 });
 
     // Uranus
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ -125,175,-500 }, 80.0f));
@@ -1139,10 +1138,10 @@ int main()
 
     // Neptune
     world->scene.push_back(std::make_shared<Sphere>(atlas::math::Point{ -300,75,-600 }, 75.0f));
-    std::shared_ptr neptunePhongPtr = std::make_shared<Phong>(0.0f, 0.0f, Colour{ 0.27,0.45,1 }, 0.0f, Colour{ 0.27,0.45,1 }, 1000.0f);
+    std::shared_ptr neptunePhongPtr = std::make_shared<Phong>(0.0f, 0.0f, Colour{ 0.27,0.45,1 }, 0.0f, Colour{ 0.27,0.45,1 }, 3000.0f);
     std::shared_ptr neptuneBrdfPtr = std::make_shared<GlossySpecular>(0.9f, Colour{ 0.27,0.45,1 }, 100.0f);
     std::shared_ptr neptunePtr = std::make_shared<GlossyReflector>(neptunePhongPtr, neptuneBrdfPtr);
-    neptunePtr->setSamples(100, 83, 1000.0f);
+    neptunePtr->setSamples(100, 83, 3000.0f);
     world->scene[8]->setMaterial(neptunePtr);
     world->scene[8]->setColour({ 0.27,0.45,1 });
 

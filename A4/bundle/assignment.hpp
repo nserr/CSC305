@@ -148,17 +148,11 @@ class BTDF {
 public:
     virtual ~BTDF() = default;
 
-    virtual Colour f([[maybe_unused]] ShadeRec& sr, [[maybe_unused]] atlas::math::Vector& wo, [[maybe_unused]] atlas::math::Vector& wi) const {
-        return Colour(0, 0, 0);
-    }
+    virtual Colour f( ShadeRec& sr, atlas::math::Vector& wo, atlas::math::Vector& wi) const = 0;
 
-    virtual Colour sampleF([[maybe_unused]] ShadeRec& sr, [[maybe_unused]] atlas::math::Vector& wo, [[maybe_unused]] atlas::math::Vector& wt) const {
-        return Colour(0, 0, 0);
-    }
+    virtual Colour sampleF(ShadeRec& sr, atlas::math::Vector& wo, atlas::math::Vector& wt) const = 0;
 
-    virtual Colour rho([[maybe_unused]] ShadeRec& sr, [[maybe_unused]] atlas::math::Vector& wo) const {
-        return Colour(0, 0, 0);
-    }
+    virtual Colour rho(ShadeRec& sr, atlas::math::Vector& wo) const = 0;
 };
 
 class Material {
